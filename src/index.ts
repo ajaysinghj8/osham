@@ -13,7 +13,7 @@ const config = getCacheConfig();
 for (const key in config) {
     switch (key) {
         case 'version': break;
-        case 'x-reponse':
+        case 'xResponseTime':
             App.use(RouteTimeReqRes);
             break;
         default:
@@ -21,4 +21,3 @@ for (const key in config) {
             App.use(createNameSpaceHandler(key, config[key]));
     }
 }
-console.log(config);
