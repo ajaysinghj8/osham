@@ -27,7 +27,7 @@ export function createNameSpaceHandler(namespace: string, options: INameSpaceOpt
         logger(`${ctx.path} matched!!`);
         const pathToCall = ctx.path.match(namespacePath)[1];
         logger(`${pathToCall} will be processed!`);
-        const cacheConfig = configContext.getConfig(pathToCall);
+        const cacheConfig = configContext.getCacheConfig(pathToCall);
         const proxyPath = options.proxy + '/' + pathToCall + (ctx.search || '');
         if (!cacheConfig || !Cache.isConnected()) {
             logger(`No cache config found for ${pathToCall}`);

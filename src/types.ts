@@ -1,5 +1,5 @@
 interface _ICacheOptions {
-    expires?: string;
+    expires?: number | string;
     query?: false | Array<string>;
     headers?: false | Array<string>;
     pool?: boolean;
