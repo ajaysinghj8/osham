@@ -1,0 +1,33 @@
+{
+  "name": "api-cache-proxy",
+  "version": "0.0.1",
+  "description": "A Configuration based Proxy server to cache API response.",
+  "main": "lib/index.js",
+  "repository": "https://github.com/ajaysinghj8/api-cache-proxy.git",
+  "author": "ajaysinghj8 <meajaysingh@srijan.net>",
+  "license": "MIT",
+  "private": false,
+  "devDependencies": {
+    "@types/js-yaml": "^3.12.1",
+    "@types/koa": "^2.0.48",
+    "@types/node": "^11.13.4",
+    "@types/path-to-regexp": "^1.7.0",
+    "mocha-typescript": "^1.1.17",
+    "supertest": "^4.0.2",
+    "ts-node": "^8.1.0",
+    "typescript": "^3.4.3"
+  },
+  "dependencies": {
+    "@types/debug": "^4.1.4",
+    "debug": "^4.1.1",
+    "dotenv": "^7.0.0",
+    "js-yaml": "^3.13.1",
+    "koa": "^2.7.0",
+    "path-to-regexp": "0.1.7",
+    "redis": "^2.8.0",
+    "reflect-metadata": "^0.1.13"
+  },
+  "engines": {
+    "node": ">=8.0.0"
+  }
+}

@@ -1,0 +1,15 @@
+src
+e2e
+.env
+
+!lib
+
+
+# configuration
+package-lock.json
+yarn.lock
+tslint.json
+tsconfig.json
+.prettierrc
+
+cache-config.yml
