@@ -13,8 +13,20 @@ export function generateKey(ns: string, ctx: Context, options: ICacheOptions) {
     const headers: Array<string> = [];
     if (options.headers) {
         for (const header of options.headers) {
-            headers.push(`${header}:${ctx.get(header)}`);
+            const value = ctx.get(header);
+            if (!value) continue;
+            headers.push(`${header}:${value}`);
         }
     }
-    return createHashKey(ns, ctx.path + headers.join('|'));
+    const queryString: Array<string> = [];
+    if (options.query) {
+        for (const q of options.query) {
+            const value = ctx.query[q];
+            if (!value) continue;
+            queryString.push(`${q}=${value}`);
+        }
+    }
+
+    const token = ctx.path + (headers.length ? ('-' + headers.join('|')) : '') + (queryString.length ? ('?' + queryString.join('&')) : '');
+    return createHashKey(ns, token);
 }
