@@ -2,6 +2,7 @@ export interface ICacheOptions {
     expires: string;
     query: false | Array<string>;
     headers: false | Array<string>;
+    pool: boolean;
 };
 
 
