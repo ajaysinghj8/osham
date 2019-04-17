@@ -1,0 +1,21 @@
+version: '1' # good to have for your own reference
+xResponseTime: true # will response with x-response-time: 100 (ms)
+dummyRest: # namespace
+  expose: '/api/v1/*' # it will be exposed to you
+  proxy: 'http://dummy.restapiexample.com/api/v1' # will get data from here
+  cache: # default cache option for above namespace
+    pool: true # concurrent request will not hit the server in case of cache miss.
+    expires: 5m # cache will expire in 5 minutes
+    query: false # changes in querysting will not return diffenent results
+    headers: false # changes in headers will not return different results
+  rules:
+    /employee/: # overriding default cache options
+      cache:
+        expires: 10s # cache will last for 10 seconds
+        pool: true # will use request pool
+        query: # results will be different for below query params
+          - limit
+          - page
+          - alphabet
+        headers:
+          - x-locale # results will be different for x-locale header value
