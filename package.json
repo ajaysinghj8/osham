@@ -27,6 +27,7 @@
     "dotenv": "^7.0.0",
     "js-yaml": "^3.13.1",
     "koa": "^2.7.0",
+    "parse-duration": "^0.1.1",
     "path-to-regexp": "0.1.7",
     "redis": "^2.8.0",
     "reflect-metadata": "^0.1.13"
