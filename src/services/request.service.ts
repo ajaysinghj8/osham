@@ -4,7 +4,7 @@ import * as Debug from 'debug';
 
 const logger = Debug('api-cache-proxy:service:request');
 
-export function onSuccessWithCtx(ctx: Context) {
+function onSuccessWithCtx(ctx: Context, time: number) {
     return ({ status, headers, data }: AxiosResponse) => {
         ctx.status = status;
         const stringData = JSON.stringify(data);
@@ -13,6 +13,7 @@ export function onSuccessWithCtx(ctx: Context) {
         }
         ctx.type = 'json';
         ctx.res.end(stringData);
+        logger(`Responded In: ${Date.now() - time} ms`);
         return {
             status,
             headers,
@@ -30,8 +31,9 @@ export function onErrorWithCtx(ctx: Context) {
 
 export function makeRequest(ctx: Context, path: string, headers: any) {
     logger(`call server for ${path}`);
+    const d1 = Date.now();
     return Axios.get(path, { headers: headers }).then(
-        onSuccessWithCtx(ctx),
+        onSuccessWithCtx(ctx, d1),
         onErrorWithCtx(ctx)
     );
 }
