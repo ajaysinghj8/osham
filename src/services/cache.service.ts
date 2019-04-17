@@ -9,9 +9,7 @@ const logger = Debug('api-cache-proxy:service:cache');
 export class Cache {
 
     static isConnected() {
-        const status = Redis.connected;
-        logger('Redis connection Status', status);
-        return status;
+        return Redis.connected;
     }
 
     static put(key: string, value: any, exptime?: number) {
