@@ -12,7 +12,7 @@ const pathToRegExp = require('path-to-regexp');
 
 
 export function createNameSpaceHandler(namespace: string, options: INameSpaceOptions) {
-    const logger = Debug(`api-cache-proxy:handler(${namespace})`);
+    const logger = Debug(`acp:handler(${namespace})`);
     logger(`Register ${namespace}`);
     const namespacePath = pathToRegExp(options.expose, [], {
         sensitive: false,

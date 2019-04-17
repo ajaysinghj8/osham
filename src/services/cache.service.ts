@@ -3,7 +3,7 @@ import { Redis } from '../storage/redis.store';
 
 
 
-const logger = Debug('api-cache-proxy:service:cache');
+const logger = Debug('acp:service:cache');
 
 
 export class Cache {

@@ -1,7 +1,7 @@
 import { RedisSub, RedisPub } from "../storage/redis.store";
 import { Cache } from "./cache.service";
 import * as Debug from 'debug';
-const logger = Debug('api-cache-proxy:service:pool');
+const logger = Debug('acp:service:pool');
 
 export class RequestPool {
     static pool: Set<string> = new Set();

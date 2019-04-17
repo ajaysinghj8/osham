@@ -1,7 +1,7 @@
 import * as Koa from 'koa';
 import * as Debug from 'debug';
 
-const logger = Debug('api-cache-proxy:server');
+const logger = Debug('acp:server');
 
 export const App = new Koa();
 

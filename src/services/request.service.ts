@@ -2,7 +2,7 @@ import Axios, { AxiosError, AxiosResponse } from 'axios';
 import { Context } from 'koa';
 import * as Debug from 'debug';
 
-const logger = Debug('api-cache-proxy:service:request');
+const logger = Debug('acp:service:request');
 
 function onSuccessWithCtx(ctx: Context, time: number) {
     return ({ status, headers, data }: AxiosResponse) => {

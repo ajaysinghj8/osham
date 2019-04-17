@@ -4,7 +4,7 @@ import * as Debug from 'debug';
 config();
 
 
-const logger = Debug('api-cache-proxy:redis');
+const logger = Debug('acp:redis');
 
 
 export const Redis = createClient({
