@@ -1,8 +1,6 @@
-import { config } from 'dotenv';
+
 import { createClient } from 'redis';
 import * as Debug from 'debug';
-config();
-
 
 const logger = Debug('acp:redis');
 
@@ -16,3 +14,5 @@ Redis.on('error', (e) => logger(e));
 
 export const RedisPub = Redis.duplicate();
 export const RedisSub = Redis.duplicate();
+
+RedisSub.setMaxListeners(Infinity);
