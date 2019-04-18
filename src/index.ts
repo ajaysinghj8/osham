@@ -1,16 +1,18 @@
+import { config } from 'dotenv';
+config();
 import { App } from './server';
 import { getCacheConfig } from './config.reader';
 import { RouteTimeReqRes } from './middlewares/responseTime';
 import { createNameSpaceHandler } from './middlewares/nameSpaceHandler';
 
-const config = getCacheConfig();
+const cacheConfig = getCacheConfig();
 
 /**
  * For each namespace
  *  create handler
  */
 
-for (const key in config) {
+for (const key in cacheConfig) {
     switch (key) {
         case 'version': break;
         case 'xResponseTime':
@@ -18,6 +20,6 @@ for (const key in config) {
             break;
         default:
             // it is namespace
-            App.use(createNameSpaceHandler(key, config[key]));
+            App.use(createNameSpaceHandler(key, cacheConfig[key]));
     }
 }
