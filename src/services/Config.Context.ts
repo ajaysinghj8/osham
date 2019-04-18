@@ -35,7 +35,7 @@ export class ConfigContext {
 
     getCacheConfig(path: string): ICacheOptions {
         const cacheConfig = this.getConfigFromRule(path);
-        if (typeof cacheConfig === 'object') return cacheConfig;
+        if (typeof cacheConfig === 'object' && cacheConfig !== null) return cacheConfig;
         if (cacheConfig === false) return cacheConfig;
         return this.cacheOption;
     }
