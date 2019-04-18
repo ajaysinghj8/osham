@@ -1,10 +1,23 @@
-import * as Koa from 'koa';
 import * as Debug from 'debug';
+import { readFileSync } from 'fs';
+import { createServer } from 'http';
+import { createServer as createSecureServer } from 'https';
 
 const logger = Debug('acp:server');
 
-export const App = new Koa();
+function createAServer() {
+    if (process.env.SECURE === 'true') {
+        const options = {
+            key: readFileSync(process.env.SSL_KEY),
+            cert: readFileSync(process.env.SSL_CERT)
+        };
+        return createSecureServer(options);
+    }
+    return createServer();
+}
 
-App.listen(+process.env.PORT || 26192, () => {
+export const Server = createAServer();
+
+Server.listen(+process.env.PORT || 26192, () => {
     logger(`listing on ${process.env.PORT}`);
 });

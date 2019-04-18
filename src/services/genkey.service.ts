@@ -1,5 +1,5 @@
 import { ICacheOptions } from "../types";
-import { Context } from "koa";
+import { Context } from '../ctx.provider';
 import { createHash } from 'crypto';
 
 function createHashKey(namespace: string, token: string) {

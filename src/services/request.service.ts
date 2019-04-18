@@ -11,7 +11,7 @@ function onSuccessWithCtx(ctx: Context, time: number) {
         for (const key in headers) {
             ctx.set(key, headers[key]);
         }
-        ctx.res.end(stringData);
+        ctx.body = stringData;
         logger(`Responded In: ${Date.now() - time} ms`);
         return {
             statusCode,
