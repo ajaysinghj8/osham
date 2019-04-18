@@ -33,6 +33,7 @@ export class RequestPool {
         await Cache.put(key, data, expires);
         RedisPub.publish(key, JSON.stringify(data));
         RequestPool.pool.delete(key);
+        process.nextTick(() => RedisSub.unsubscribe(key));
         return data;
     }
 
