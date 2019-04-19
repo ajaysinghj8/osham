@@ -3,6 +3,12 @@ import { Cache } from "./cache.service";
 import * as Debug from 'debug';
 const logger = Debug('acp:service:pool');
 
+function nextTick() {
+    return new Promise((resolve) => {
+        process.nextTick(resolve);
+    });
+}
+
 export class RequestPool {
     static pool: Set<string> = new Set();
 
@@ -33,8 +39,18 @@ export class RequestPool {
         await Cache.put(key, data, expires);
         RedisPub.publish(key, JSON.stringify(data));
         RequestPool.pool.delete(key);
-        process.nextTick(() => RedisSub.unsubscribe(key));
+        nextTick().then(() => RedisSub.unsubscribe(key)); //async
         return data;
+    }
+
+    static async errorAndPublish(key: string, data: any) {
+        logger(`error and publishing for ${key}`);
+        RedisSub.subscribe(key);
+        await nextTick();
+        RedisPub.publish(key, JSON.stringify(data));
+        RequestPool.pool.delete(key);
+        await nextTick();
+        RedisSub.unsubscribe(key);
     }
 
 }

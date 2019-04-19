@@ -5,7 +5,8 @@ import * as Debug from 'debug';
 const logger = Debug('acp:service:request');
 
 function onSuccessWithCtx(ctx: Context, time: number) {
-    return ({ status, headers, data }: AxiosResponse) => {
+    return (response: AxiosResponse) => {
+        const { status, headers, data } = response;
         ctx.status = status;
         const stringData = JSON.stringify(data);
         for (const key in headers) {
@@ -24,8 +25,7 @@ function onSuccessWithCtx(ctx: Context, time: number) {
 
 export function onErrorWithCtx(ctx: Context) {
     return (error: AxiosError) => {
-        ctx.status = error.response.status;
-        ctx.res.end(error.response.data);
+        throw error;
     };
 }
 
@@ -36,4 +36,17 @@ export function makeRequest(ctx: Context, path: string, headers: any) {
         onSuccessWithCtx(ctx, d1),
         onErrorWithCtx(ctx)
     );
+}
+
+export function errorToData(error: AxiosError) {
+    const data: any = { status: 503, data: '', headers: [] };
+    try {
+        const { response, message } = error;
+        if (response) {
+            const { status, data, headers } = response;
+            return { status, data, headers };
+        }
+        data.data = message;
+    } catch (e) { }
+    return data;
 }

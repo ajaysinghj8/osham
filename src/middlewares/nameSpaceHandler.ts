@@ -5,7 +5,7 @@ import { generateKey } from "../services/genkey.service";
 import { Cache } from "../services/cache.service";
 import { RequestPool } from "../services/pool.service";
 import { ConfigContext } from "../services/Config.Context";
-import { makeRequest } from "../services/request.service";
+import { makeRequest, errorToData } from "../services/request.service";
 import { respondWithCtx } from "../utils";
 
 const pathToRegExp = require('path-to-regexp');
@@ -23,6 +23,10 @@ export function createNameSpaceHandler(namespace: string, options: INameSpaceOpt
     const configContext = new ConfigContext(options.cache, options.rules);
 
     return function handler(ctx: Context, next: any) {
+        // @todo 
+        if (ctx.method === 'OPTIONS') return next();
+        //@todo proxy 
+        if (ctx.method !== 'GET') return next();
         if (!namespacePath.test(ctx.path)) return next();
         logger(`${ctx.path} matched!!`);
         const pathToCall = ctx.path.match(namespacePath)[1];
@@ -52,7 +56,12 @@ export function createNameSpaceHandler(namespace: string, options: INameSpaceOpt
 
                 RequestPool.add(cacheKey);
                 return makeRequest(ctx, proxyPath, ctx.headers)
-                    .then((res) => RequestPool.putAndPublish(cacheKey, res, +cacheConfig.expires));
+                    .then((res) => RequestPool.putAndPublish(cacheKey, res, +cacheConfig.expires))
+                    .catch((error: any) => {
+                        const response = errorToData(error);
+                        respondWithCtx(ctx)(response);
+                        RequestPool.errorAndPublish(cacheKey, response)
+                    });
             }
         );
     };
