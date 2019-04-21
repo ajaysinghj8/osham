@@ -1,15 +1,15 @@
 import { Context } from "koa";
 
 export function respondWithCtx(ctx: Context) {
-    return ({ status, headers, data }: any) => {
-        ctx.status = status;
+    return ({ statusCode, headers, data }: any) => {
+        ctx.status = statusCode;
         for (const key in headers) {
             ctx.set(key, headers[key]);
         }
         ctx.type = 'json';
         ctx.res.end(data);
         return {
-            status, headers, data
+            statusCode, headers, data
         };
     };
 }

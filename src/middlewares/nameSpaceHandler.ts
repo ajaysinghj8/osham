@@ -7,6 +7,7 @@ import { RequestPool } from "../services/pool.service";
 import { ConfigContext } from "../services/Config.Context";
 import { makeRequest, errorToData } from "../services/request.service";
 import { respondWithCtx } from "../utils";
+import { createProxy } from "../proxy";
 
 const pathToRegExp = require('path-to-regexp');
 
@@ -21,21 +22,23 @@ export function createNameSpaceHandler(namespace: string, options: INameSpaceOpt
     });
 
     const configContext = new ConfigContext(options.cache, options.rules);
+    const proxyRequest = createProxy(options);
 
     return function handler(ctx: Context, next: any) {
-        // @todo 
-        if (ctx.method === 'OPTIONS') return next();
-        //@todo proxy 
-        if (ctx.method !== 'GET') return next();
         if (!namespacePath.test(ctx.path)) return next();
         logger(`${ctx.path} matched!!`);
         const pathToCall = ctx.path.match(namespacePath)[1];
         logger(`${pathToCall} will be processed!`);
+        ctx.respond = false;
         const cacheConfig = configContext.getCacheConfig(pathToCall);
-        const proxyPath = options.proxy + '/' + pathToCall + (ctx.search || '');
+        const proxyPath = pathToCall + (ctx.search || '');
+
+        if (ctx.method !== 'GET') {
+            return proxyRequest(proxyPath, ctx.method, ctx.headers).pipes(ctx.res);
+        }
         if (!cacheConfig || !Cache.isConnected()) {
             logger(`No cache config found for ${pathToCall}`);
-            return makeRequest(ctx, proxyPath, ctx.headers);
+            return proxyRequest(proxyPath, ctx.method, ctx.headers).pipes(ctx.res);
         }
 
         const cacheKey = generateKey(namespace, ctx, cacheConfig);
@@ -46,8 +49,8 @@ export function createNameSpaceHandler(namespace: string, options: INameSpaceOpt
                 logger(`Cache miss ${pathToCall}`);
                 if (!cacheConfig.pool) {
                     logger(`No request pool`);
-                    return makeRequest(ctx, proxyPath, ctx.headers)
-                        .then((res) => Cache.put(cacheKey, res, +cacheConfig.expires))
+                    return proxyRequest(proxyPath, ctx.method, ctx.headers).pipes(ctx.res)
+                        .toPromise().then((res: any) => Cache.put(cacheKey, res.toJSON(), +cacheConfig.expires));
                 }
 
                 if (RequestPool.has(cacheKey)) {
@@ -55,8 +58,8 @@ export function createNameSpaceHandler(namespace: string, options: INameSpaceOpt
                 }
 
                 RequestPool.add(cacheKey);
-                return makeRequest(ctx, proxyPath, ctx.headers)
-                    .then((res) => RequestPool.putAndPublish(cacheKey, res, +cacheConfig.expires))
+                return proxyRequest(proxyPath, ctx.method, ctx.headers).pipes(ctx.res).toPromise()
+                    .then((res: any) => RequestPool.putAndPublish(cacheKey, res.toJSON(), +cacheConfig.expires))
                     .catch((error: any) => {
                         const response = errorToData(error);
                         respondWithCtx(ctx)(response);
