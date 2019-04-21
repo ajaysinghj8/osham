@@ -15,6 +15,9 @@ const cacheConfig = getCacheConfig();
 for (const key in cacheConfig) {
     switch (key) {
         case 'version': break;
+        case 'timeout':
+            // @todo apply timeout 
+            break;
         case 'xResponseTime':
             App.use(RouteTimeReqRes);
             break;

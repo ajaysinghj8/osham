@@ -14,7 +14,11 @@ export interface IRulesOptions {
 
 export interface INameSpaceOptions {
     expose: string;
-    proxy: string;
+    target: string;
+    port?: number;
+    followRedirects?: boolean;
+    changeOrigin?: boolean;
+    timeout?: number;
     rules: IRulesOptions;
     cache: ICacheOptions;
 }
