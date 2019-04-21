@@ -1,22 +1,20 @@
-import Axios, { AxiosError, AxiosResponse } from 'axios';
 import { Context } from 'koa';
 import * as Debug from 'debug';
 
 const logger = Debug('acp:service:request');
 
 function onSuccessWithCtx(ctx: Context, time: number) {
-    return (response: AxiosResponse) => {
-        const { status, headers, data } = response;
-        ctx.status = status;
-        const stringData = JSON.stringify(data);
+    return (response: any) => {
+        const { statusCode, headers, data } = response;
+        ctx.status = statusCode;
+        const stringData = data;
         for (const key in headers) {
             ctx.set(key, headers[key]);
         }
-        ctx.type = 'json';
         ctx.res.end(stringData);
         logger(`Responded In: ${Date.now() - time} ms`);
         return {
-            status,
+            statusCode,
             headers,
             data: stringData,
         };
@@ -24,7 +22,7 @@ function onSuccessWithCtx(ctx: Context, time: number) {
 }
 
 export function onErrorWithCtx(ctx: Context) {
-    return (error: AxiosError) => {
+    return (error: any) => {
         throw error;
     };
 }
@@ -32,19 +30,19 @@ export function onErrorWithCtx(ctx: Context) {
 export function makeRequest(ctx: Context, path: string, headers: any) {
     logger(`call server for ${path}`);
     const d1 = Date.now();
+    const Axios: any = {}; /** no more axios */
     return Axios.get(path, { headers: headers }).then(
         onSuccessWithCtx(ctx, d1),
         onErrorWithCtx(ctx)
     );
 }
 
-export function errorToData(error: AxiosError) {
-    const data: any = { status: 503, data: '', headers: [] };
+export function errorToData(error: any) {
+    const data: any = { statusCode: 503, data: '', headers: [] };
     try {
-        const { response, message } = error;
-        if (response) {
-            const { status, data, headers } = response;
-            return { status, data, headers };
+        const { message, statusCode, data, headers } = error;
+        if (message) {
+            return { statusCode, data, headers };
         }
         data.data = message;
     } catch (e) { }
