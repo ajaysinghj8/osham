@@ -4,11 +4,11 @@ import * as Http from 'http';
 import * as Https from 'http2';
 import { parse, UrlWithStringQuery } from 'url';
 import { join } from 'path';
-
+import * as Debug from 'debug';
 import { writeHeaders } from './utils';
 
 const NativeAgents = { http: Http, https: Https };
-
+const logger = Debug('acp:service:proxy');
 export interface IProxyOptions {
     target: string;
     port?: number;
@@ -53,6 +53,7 @@ class Proxy {
     }
 
     request(path: string, method: string, headers: Array<any>, dataStream?: any) {
+        logger(`Request(${method}) ${path}`);
         const options = this.getRequestOptions(path, method, headers);
         const request: ExtendedClientRequest = this.agent.request(options);
         if (this.options.timeout) {
