@@ -1,6 +1,6 @@
-import { RedisSub, RedisPub } from "../storage/redis.store";
 import { Cache } from "./cache.service";
 import * as Debug from 'debug';
+import { EventEmitter } from "events";
 const logger = Debug('acp:service:pool');
 
 function nextTick() {
@@ -11,6 +11,7 @@ function nextTick() {
 
 export class RequestPool {
     static pool: Set<string> = new Set();
+    static ee: EventEmitter = (new EventEmitter()).setMaxListeners(Infinity);
 
     static has(key: string) {
         return RequestPool.pool.has(key);
@@ -23,34 +24,26 @@ export class RequestPool {
     static wait(key: string) {
         logger(`wating for ${key}`);
         return new Promise((resolve) => {
-            function handler(channel: string, data: any) {
-                if (channel !== key) return;
-                resolve(JSON.parse(data));
+            function handler(data: any) {
+                resolve(data);
                 logger(`respond for ${key}`);
-                RedisSub.off(key, handler);
             }
-            RedisSub.on('message', handler);
+            RequestPool.ee.once(key, handler);
         });
     }
 
     static async putAndPublish(key: string, data: any, expires: number) {
         logger(`putting and publishing for ${key}`);
-        RedisSub.subscribe(key);
+        RequestPool.ee.emit(key, data);
         await Cache.put(key, data, expires);
-        RedisPub.publish(key, JSON.stringify(data));
         RequestPool.pool.delete(key);
-        nextTick().then(() => RedisSub.unsubscribe(key)); //async
         return data;
     }
 
     static async errorAndPublish(key: string, data: any) {
         logger(`error and publishing for ${key}`);
-        RedisSub.subscribe(key);
-        await nextTick();
-        RedisPub.publish(key, JSON.stringify(data));
+        RequestPool.ee.emit(key, data);
         RequestPool.pool.delete(key);
-        await nextTick();
-        RedisSub.unsubscribe(key);
     }
 
 }
