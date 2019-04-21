@@ -1,19 +1,16 @@
-import { IncomingMessage, ServerResponse } from "http";
+import { IncomingMessage, ServerResponse, IncomingHttpHeaders } from "http";
 import { Stream } from "stream";
 import { parse } from "url";
 const statuses = require('statuses');
+const qs = require('querystring');
 
 function respond() {
     const ctx = this;
-    // allow bypassing koa
-    if (false === ctx.sent) return;
-
     if (!ctx.writable) return;
 
     const res = ctx.res;
     let body = ctx.body;
-    const code = ctx.status;
-
+    const code = ctx.statusCode;
     // ignore body
     if (statuses.empty[code]) {
         // strip headers
@@ -47,16 +44,80 @@ function respond() {
 }
 
 
+export interface Context {
+    req: IncomingMessage;
+    path: string;
+    headers: IncomingHttpHeaders;
+    method: string;
+    querystring: string;
+    query: any;
+    search: string;
+    get: (field: string) => string;
+
+    res: ServerResponse;
+    set: (field: string, val: any) => Context;
+    respond: () => any;
+    body: any;
+    state: any;
+    writable: boolean;
+    statusCode: number;
+    statusMessage: string;
+}
+
+
 export function CtxProvider(req: IncomingMessage, res: ServerResponse) {
-
-
+    const urlParsedCache = parse(req.url);
     const ctx: Context = {
+        /** in */
         req,
+        get path() {
+            return urlParsedCache.pathname;
+        },
+        get headers() {
+            return this.req.headers;
+        },
+        get method() {
+            return this.req.method;
+        },
+        get querystring() {
+            if (!this.req) return '';
+            return urlParsedCache.query || '';
+        },
+        get search() {
+            if (!this.querystring) return '';
+            return `?${this.querystring}`;
+        },
+        get(field: string) {
+            const req = this.req;
+            switch (field = field.toLowerCase()) {
+                case 'referer':
+                case 'referrer':
+                    return req.headers.referrer || req.headers.referer || '';
+                default:
+                    return req.headers[field] || '';
+            }
+        },
+        get query() {
+            const str = this.querystring;
+            const c = this._querycache = this._querycache || {};
+            return c[str] || (c[str] = qs.parse(str));
+        },
+
+        /** out */
         res,
-        set: function set(field: string, val: any) {
-            // @todo if header not send
-            this.res.setHeader(field, val);
-            return this;
+        body: null,
+        state: {},
+        get statusCode() {
+            return this.res.statusCode;
+        },
+        set statusCode(code: number) {
+            this.res.statusCode = code;
+        },
+        get statusMessage() {
+            return this.res.statusMessage;
+        },
+        set statusMessage(msg: string) {
+            this.res.statusMessage = msg;
         },
         respond,
         get writable() {
@@ -65,24 +126,11 @@ export function CtxProvider(req: IncomingMessage, res: ServerResponse) {
             if (!socket) return true;
             return socket.writable;
         },
-        body: null,
-        state: {},
-        status: 404,
-        get path() {
-            return parse(this.req).pathname;
+        set(field: string, val: any) {
+            // @todo if header not send
+            this.res.setHeader(field, val);
+            return this;
         },
     };
     return ctx;
-}
-
-export interface Context {
-    req: IncomingMessage;
-    res: ServerResponse;
-    set: (field: string, val: any) => Context;
-    respond: () => undefined;
-    body: any;
-    state: any;
-    writable: boolean;
-    status: number;
-    path: string;
 }
