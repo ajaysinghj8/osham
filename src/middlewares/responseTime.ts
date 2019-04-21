@@ -1,4 +1,4 @@
-import { Context } from 'koa';
+import { Context } from '../ctx.provider';
 
 export async function RouteTimeReqRes(ctx: Context, next: any) {
     const start = +new Date();

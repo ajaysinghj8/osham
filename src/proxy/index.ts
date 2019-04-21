@@ -1,11 +1,12 @@
 import { IncomingMessage, ServerResponse, ClientRequest } from 'http';
 import * as FollowRedirects from 'follow-redirects';
 import * as Http from 'http';
-import * as Https from 'http2';
+import * as Https from 'https';
 import { parse, UrlWithStringQuery } from 'url';
 import { join } from 'path';
 import * as Debug from 'debug';
 import { writeHeaders } from './utils';
+import { Context } from '../ctx.provider';
 
 const NativeAgents = { http: Http, https: Https };
 const logger = Debug('acp:service:proxy');
@@ -32,13 +33,15 @@ export interface ProxyResponsePromise<T = any> extends Promise<ProxyResponse<T>>
 }
 
 interface ExtendedClientRequest extends ClientRequest {
-    pipes?(response: any): ExtendedClientRequest;
+    pipes?(ctx: Context): ExtendedClientRequest;
     toPromise?(): ProxyResponsePromise<any>;
 };
 
 class Proxy {
     static isSSL: RegExp = /^https/;
     static upgradeHeader: RegExp = /(^|,)\s*upgrade\s*($|,)/i;
+    static ErrorResponse: any = { statusCode: 503, statusMessage: 'Service Unavailable', headers: {} };
+
     private isSecure: boolean = false;
     private agent: any;
     private port: number;
@@ -52,20 +55,29 @@ class Proxy {
         this.agent = this.isSecure ? agents.https : agents.http;
     }
 
-    request(path: string, method: string, headers: Array<any>, dataStream?: any) {
+    request(path: string, method: string, headers: any, dataStream?: any) {
         logger(`Request(${method}) ${path}`);
         const options = this.getRequestOptions(path, method, headers);
         const request: ExtendedClientRequest = this.agent.request(options);
         if (this.options.timeout) {
             request.setTimeout(this.options.timeout, () => request.abort());
         }
-        request.pipes = (response: ServerResponse) => this.pipe(request, response);
-        request.toPromise = () => this.toPromise(request);
+        const proxyCtx = {
+            pipes,
+            toPromise,
+            prxoy: this,
+        };
         if (dataStream && dataStream.pipe) {
             dataStream.pipe(request);
         }
         request.end();
-        return request;
+        return new Promise((resolve, reject) => {
+            request.on('response', (response: IncomingMessage) => {
+                resolve({ ...proxyCtx, request, response });
+            });
+            request.on('error', (e: Error) => reject({ ...proxyCtx, request, response: { ...Proxy.ErrorResponse }, message: e.message }));
+            request.on('abort', (e: Error) => reject({ ...proxyCtx, request, response: { ...Proxy.ErrorResponse }, message: e.message }));
+        });
     }
 
     private getRequestOptions(path: string, method: string, headers: any) {
@@ -93,65 +105,56 @@ class Proxy {
 
         return options;
     }
-
-
-    pipe(request: ExtendedClientRequest, response: ServerResponse): ExtendedClientRequest {
-        request.on('response', (res: IncomingMessage) => {
-            response.statusCode = res.statusCode;
-            response.statusMessage = res.statusMessage;
-            /** if not res.headersSent */
-            /** @TODO:: ctx.setHeaders */
-            writeHeaders(res.headers, response);
-            /** if not res.finished */
-            res.pipe(response);
-        });
-        /**
-         * @TODO::
-         * on abort
-         * on error
-         * 
-         */
-        return request;
-    }
-
-    toPromise(request: ExtendedClientRequest): ProxyResponsePromise<string> {
-        return new Promise((resolve, reject) => {
-            request.on('response', (response: IncomingMessage) => {
-                const { statusCode, statusMessage } = response;
-
-                const ob: ProxyResponse = {
-                    data: '',
-                    statusCode,
-                    statusMessage,
-                    headers: writeHeaders(response.headers),
-                    request,
-                    response,
-                    toJSON: function () {
-                        return {
-                            data: this.data,
-                            statusCode: this.statusCode,
-                            statusMessage: this.statusMessage,
-                            headers: this.headers
-                        };
-                    },
-                    message: ''
-                };
-                response.on('error', (e) => reject({ ...ob, message: e.message }));
-                response.on('data', (chunk) => ob.data += chunk);
-                response.on('end', () => {
-                    if (ob.statusCode >= 200 && ob.statusCode < 300) {
-                        return resolve(ob);
-                    }
-                    return reject(ob);
-                });
-            });
-        });
-    }
 }
 
 
 export function createProxy(options: IProxyOptions) {
     const proxy = new Proxy(options);
-    return (path: string, method: string, headers: Array<any>, dataStream?: any) =>
+    return (path: string, method: string, headers: any, dataStream?: any) =>
         proxy.request(path, method, headers, dataStream);
+};
+
+function pipes(ctx: Context) {
+    const { response } = this;
+    const { statusCode, statusMessage, headers } = response;
+    ctx.statusCode = statusCode;
+    ctx.statusMessage = statusMessage;
+    ctx.state.headers = writeHeaders(response.headers, ctx);
+    ctx.body = response;
+    /** if not res.headersSent */
+    /** @TODO:: ctx.setHeaders */
+    /** if not res.finished */
+    return this;
+}
+
+function toPromise(ctx: Context) {
+    const proxyCtx = this;
+    const { response } = proxyCtx;
+    return new Promise((resolve, reject) => {
+        const { statusCode, statusMessage } = response;
+        const ob: ProxyResponse = {
+            data: '',
+            statusCode,
+            statusMessage,
+            headers: ctx.state.headers || writeHeaders(response.headers),
+            ...proxyCtx,
+            toJSON: function () {
+                return {
+                    data: this.data,
+                    statusCode: this.statusCode,
+                    statusMessage: this.statusMessage,
+                    headers: this.headers
+                };
+            },
+            message: ''
+        };
+        response.on('error', (e: any) => reject({ ...ob, message: e.message }));
+        response.on('data', (chunk: any) => ob.data += chunk);
+        response.on('end', () => {
+            if (ob.statusCode >= 200 && ob.statusCode < 300) {
+                return resolve(ob);
+            }
+            return reject(ob);
+        });
+    });
 }
