@@ -1,4 +1,4 @@
-import { Context } from 'koa';
+import { Context } from '../ctx.provider';
 import * as Debug from 'debug';
 
 const logger = Debug('acp:service:request');
@@ -6,7 +6,7 @@ const logger = Debug('acp:service:request');
 function onSuccessWithCtx(ctx: Context, time: number) {
     return (response: any) => {
         const { statusCode, headers, data } = response;
-        ctx.status = statusCode;
+        ctx.statusCode = statusCode;
         const stringData = data;
         for (const key in headers) {
             ctx.set(key, headers[key]);
