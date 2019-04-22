@@ -57,27 +57,35 @@ class Proxy {
 
     request(path: string, method: string, headers: any, dataStream?: any) {
         logger(`Request(${method}) ${path}`);
-        const options = this.getRequestOptions(path, method, headers);
-        const request: ExtendedClientRequest = this.agent.request(options);
-        if (this.options.timeout) {
-            request.setTimeout(this.options.timeout, () => request.abort());
-        }
         const proxyCtx = {
             pipes,
             toPromise,
             prxoy: this,
         };
-        if (dataStream && dataStream.pipe) {
-            dataStream.pipe(request);
-        }
-        request.end();
-        return new Promise((resolve, reject) => {
-            request.on('response', (response: IncomingMessage) => {
-                resolve({ ...proxyCtx, request, response });
+        try {
+            const options = this.getRequestOptions(path, method, headers);
+            const request: ExtendedClientRequest = this.agent.request(options);
+            if (this.options.timeout) {
+                request.setTimeout(this.options.timeout, () => request.abort());
+            }
+            if (dataStream && dataStream.pipe) {
+                dataStream.pipe(request);
+            }
+            request.end();
+            return new Promise((resolve, reject) => {
+                request.on('response', (response: IncomingMessage) => {
+                    resolve({ ...proxyCtx, request, response });
+                });
+                request.on('error', (e: Error) => resolve({ ...proxyCtx, request, response: { ...Proxy.ErrorResponse }, message: e.message }));
+                request.on('abort', (e: Error) => resolve({ ...proxyCtx, request, response: { ...Proxy.ErrorResponse }, message: e.message }));
             });
-            request.on('error', (e: Error) => reject({ ...proxyCtx, request, response: { ...Proxy.ErrorResponse }, message: e.message }));
-            request.on('abort', (e: Error) => reject({ ...proxyCtx, request, response: { ...Proxy.ErrorResponse }, message: e.message }));
-        });
+        } catch (e) {
+            return Promise.resolve({
+                ...proxyCtx,
+                message: e.message,
+                response: { ...Proxy.ErrorResponse }
+            });
+        }
     }
 
     private getRequestOptions(path: string, method: string, headers: any) {
@@ -115,12 +123,12 @@ export function createProxy(options: IProxyOptions) {
 };
 
 function pipes(ctx: Context) {
-    const { response } = this;
+    const { response, message } = this;
     const { statusCode, statusMessage, headers } = response;
     ctx.statusCode = statusCode;
     ctx.statusMessage = statusMessage;
-    ctx.state.headers = writeHeaders(response.headers, ctx);
-    ctx.body = response;
+    ctx.state.headers = writeHeaders(headers, ctx);
+    ctx.body = message || response;
     /** if not res.headersSent */
     /** @TODO:: ctx.setHeaders */
     /** if not res.finished */
@@ -129,7 +137,7 @@ function pipes(ctx: Context) {
 
 function toPromise(ctx: Context) {
     const proxyCtx = this;
-    const { response } = proxyCtx;
+    const { response, message } = proxyCtx;
     return new Promise((resolve, reject) => {
         const { statusCode, statusMessage } = response;
         const ob: ProxyResponse = {
@@ -148,13 +156,16 @@ function toPromise(ctx: Context) {
             },
             message: ''
         };
+        if (!response.on) {
+            return reject({ ...ob, message: message });
+        }
         response.on('error', (e: any) => reject({ ...ob, message: e.message }));
         response.on('data', (chunk: any) => ob.data += chunk);
         response.on('end', () => {
             if (ob.statusCode >= 200 && ob.statusCode < 300) {
                 return resolve(ob);
             }
-            return reject(ob);
+            reject({ ...ob, message: message });
         });
     });
 }

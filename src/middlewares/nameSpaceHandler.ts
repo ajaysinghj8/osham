@@ -33,13 +33,8 @@ export function createNameSpaceHandler(namespace: string, options: INameSpaceOpt
         const cacheConfig = configContext.getCacheConfig(pathToCall);
         const proxyPath = pathToCall + (ctx.search || '');
 
-        if (ctx.method !== 'GET') {
-            const proxyCtx: any = await proxyRequest(proxyPath, ctx.method, ctx.headers)
-            return proxyCtx.pipes(ctx);
-
-        }
-        if (!cacheConfig || !Cache.isConnected()) {
-            logger(`No cache config found for ${pathToCall}`);
+        if ((ctx.method !== 'GET') || !cacheConfig) {
+            logger(`${ctx.method} ${pathToCall} ${cacheConfig ? '(No cache config)' : ''}`)
             const proxyCtx: any = await proxyRequest(proxyPath, ctx.method, ctx.headers)
             return proxyCtx.pipes(ctx);
         }
@@ -54,19 +49,13 @@ export function createNameSpaceHandler(namespace: string, options: INameSpaceOpt
             logger(`No request pool`);
             const proxyCtx: any = await proxyRequest(proxyPath, ctx.method, ctx.headers);
             // async
-            proxyCtx.toPromise(ctx).then((res: any) => Cache.put(cacheKey, res.toJSON(), +cacheConfig.expires));
+            proxyCtx.toPromise(ctx).then((res: any) => Cache.put(cacheKey, res.toJSON(), +cacheConfig.expires))
+                .catch(() => ({}));
             return proxyCtx.pipes(ctx);
         }
 
         if (RequestPool.has(cacheKey)) {
-            try {
-                return RequestPool.wait(cacheKey).then(respondWithCtx(ctx));
-            } catch (e) {
-                ctx.statusCode = 503;
-                ctx.statusMessage = e.message;
-                ctx.body = '';
-                return e;
-            }
+            return RequestPool.wait(cacheKey).then(respondWithCtx(ctx));
         }
 
         RequestPool.add(cacheKey);
@@ -75,7 +64,6 @@ export function createNameSpaceHandler(namespace: string, options: INameSpaceOpt
             .then((res: any) => RequestPool.putAndPublish(cacheKey, res.toJSON(), +cacheConfig.expires))
             .catch((error: any) => {
                 const response = errorToData(error);
-                respondWithCtx(ctx)(response);
                 RequestPool.errorAndPublish(cacheKey, response)
             });
         return proxyCtx.pipes(ctx);
