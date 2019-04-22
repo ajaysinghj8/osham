@@ -11,5 +11,6 @@ yarn.lock
 tslint.json
 tsconfig.json
 .prettierrc
-
-cache-config.yml
+.prettierignore
+tsconfig.json
+tslint.json

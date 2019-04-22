@@ -1,22 +1,18 @@
 {
-    "compilerOptions": {
-        "target": "es6",
-        "module": "commonjs",
-        "moduleResolution": "node",
-        "noImplicitAny": true,
-        "removeComments": true,
-        "preserveConstEnums": true,
-        "sourceMap": true,
-        "experimentalDecorators": true,
-        "emitDecoratorMetadata": true,
-        "lib": ["es6", "es2018", "es2017"],
-        "types": ["reflect-metadata", "node"],
-        "rootDir": "src/",
-        "outDir": "lib/"
-    },
-    "exclude": [
-        "./node_modules",
-        "./lib"
-    ]
-
+  "compilerOptions": {
+    "target": "esnext",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "noImplicitAny": true,
+    "removeComments": true,
+    "preserveConstEnums": true,
+    "sourceMap": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "lib": ["es6", "es2018", "es2017"],
+    "types": ["reflect-metadata", "node"],
+    "rootDir": "src/",
+    "outDir": "lib/"
+  },
+  "exclude": ["./node_modules", "./lib"]
 }
