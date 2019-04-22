@@ -1,10 +1,13 @@
 import { IncomingMessage, ServerResponse, IncomingHttpHeaders } from "http";
 import { Stream } from "stream";
 import { parse } from "url";
+import * as Debug from 'debug';
 const statuses = require('statuses');
 const qs = require('querystring');
+const logger = Debug('acp:server');
 
 function respond() {
+    logger('respond called');
     const ctx = this;
     if (!ctx.writable) return;
 
@@ -38,7 +41,6 @@ function respond() {
         }
         return res.end(body);
     }
-
     if (body instanceof Stream) return body.pipe(res);
     res.end(body);
 }
