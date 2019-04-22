@@ -1,5 +1,5 @@
 {
-  "name": "api-cache-proxy",
+  "name": "rachna",
   "version": "0.0.1",
   "description": "A Configuration based Proxy server to cache API response.",
   "main": "lib/index.js",
