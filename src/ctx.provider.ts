@@ -1,11 +1,11 @@
 import { IncomingMessage, ServerResponse, IncomingHttpHeaders } from "http";
 import { Stream } from "stream";
-import { parse } from "url";
+// import { parse } from "url";
 import * as Debug from 'debug';
 const statuses = require('statuses');
 const qs = require('querystring');
 const logger = Debug('acp:server');
-
+const parse = require('parseurl');
 function respond() {
     logger('respond called');
     const ctx = this;
@@ -68,7 +68,7 @@ export interface Context {
 
 
 export function CtxProvider(req: IncomingMessage, res: ServerResponse) {
-    const urlParsedCache = parse(req.url);
+    const urlParsedCache = parse(req);
     const ctx: Context = {
         /** in */
         req,

@@ -7,6 +7,10 @@
   "author": "ajaysinghj8 <meajaysingh@srijan.net>",
   "license": "MIT",
   "private": false,
+  "scripts": {
+    "start": "node lib/index.js",
+    "build": "tsc"
+  },
   "devDependencies": {
     "@types/debug": "^4.1.4",
     "@types/dotenv": "^6.1.1",
@@ -16,6 +20,7 @@
     "@types/path-to-regexp": "^1.7.0",
     "@types/redis": "^2.8.12",
     "artillery": "^1.6.0-27",
+    "flamebearer": "^1.1.3",
     "mocha-typescript": "^1.1.17",
     "supertest": "^4.0.2",
     "ts-node": "^8.1.0",
@@ -28,6 +33,7 @@
     "js-yaml": "^3.13.1",
     "koa-compose": "^4.1.0",
     "parse-duration": "^0.1.1",
+    "parseurl": "^1.3.3",
     "path-to-regexp": "0.1.7",
     "querystring": "^0.2.0",
     "redis": "^2.8.0",
