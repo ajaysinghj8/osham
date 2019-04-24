@@ -9,7 +9,7 @@
   "private": false,
   "scripts": {
     "start": "node lib/index.js",
-    "build": "tsc"
+    "build": "rm -rf lib && tsc"
   },
   "bugs": {
     "url": "https://github.com/ajaysinghj8/osham/issues"
