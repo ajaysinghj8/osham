@@ -14,3 +14,9 @@ tsconfig.json
 .prettierignore
 tsconfig.json
 tslint.json
+
+.vscode
+.temp
+Dockerfile
+cache-config.yml
+node_modules
