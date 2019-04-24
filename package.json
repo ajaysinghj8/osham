@@ -25,6 +25,9 @@
     "Redis",
     "Fast"
   ],
+  "bin": {
+    "osham": "./bin/osham"
+  },
   "devDependencies": {
     "@types/debug": "^4.1.4",
     "@types/dotenv": "^6.1.1",
