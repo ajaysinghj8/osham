@@ -1,6 +1,6 @@
 {
   "name": "osham",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "A Configuration based Proxy server to cache API response.",
   "main": "lib/index.js",
   "repository": "https://github.com/ajaysinghj8/api-cache-proxy.git",
