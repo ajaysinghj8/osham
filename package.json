@@ -4,7 +4,6 @@
   "description": "A Configuration based Proxy server to cache API response.",
   "main": "lib/index.js",
   "typings": "./lib/index.d.ts",
-  "repository": "https://github.com/ajaysinghj8/api-cache-proxy.git",
   "author": "ajaysinghj8 <meajaysingh@srijan.net>",
   "license": "MIT",
   "private": false,
@@ -12,6 +11,20 @@
     "start": "node lib/index.js",
     "build": "tsc"
   },
+  "bugs": {
+    "url": "https://github.com/ajaysinghj8/osham/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ajaysinghj8/osham.git"
+  },
+  "keywords": [
+    "Cache",
+    "Proxy",
+    "Configurable",
+    "Redis",
+    "Fast"
+  ],
   "devDependencies": {
     "@types/debug": "^4.1.4",
     "@types/dotenv": "^6.1.1",
