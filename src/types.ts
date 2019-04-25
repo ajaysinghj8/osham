@@ -1,12 +1,11 @@
-interface _ICacheOptions {
+interface BaseICacheOptions {
     expires?: number | string;
     query?: false | Array<string>;
     headers?: false | Array<string>;
     pool?: boolean;
-};
+}
 
-export type ICacheOptions = undefined | false | _ICacheOptions;
-
+export type ICacheOptions = undefined | false | BaseICacheOptions;
 
 export interface IRulesOptions {
     [key: string]: { cache: ICacheOptions };

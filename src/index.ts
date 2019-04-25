@@ -6,10 +6,10 @@ import { getCacheConfig } from './config.reader';
 import { RouteTimeReqRes } from './middlewares/responseTime';
 import { createNameSpaceHandler } from './middlewares/nameSpaceHandler';
 import { CtxProvider } from './ctx.provider';
-import { timeoutMiddlewareProvider } from './middlewares/timeoutMiddleware';
-const compose = require('koa-compose');
+import * as compose from 'koa-compose';
+// import { timeoutMiddlewareProvider } from './middlewares/timeoutMiddleware';
 
-const middlewares: Array<Function> = [];
+const middlewares: Array<any> = [];
 const cacheConfig = getCacheConfig();
 
 // /**
@@ -22,6 +22,7 @@ if (process.env.TIMEOUT) {
 }
 
 for (const key in cacheConfig) {
+    if (!Object.prototype.hasOwnProperty.call(cacheConfig, key)) continue;
     switch (key) {
         case 'version': break;
         case 'xResponseTime':

@@ -1,5 +1,7 @@
-import { ICacheOptions, IRulesOptions } from "../types";
+import { ICacheOptions, IRulesOptions } from '../types';
+// tslint:disable-next-line: no-var-requires
 const pathToRegExp = require('path-to-regexp');
+// tslint:disable-next-line: no-var-requires
 const parseToMs = require('parse-duration');
 
 function memo(fn: Function) {
@@ -9,7 +11,7 @@ function memo(fn: Function) {
         const result = fn(path);
         store.set(path, result);
         return result;
-    }
+    };
 }
 export class ConfigContext {
     private regexRules: any = {};
@@ -21,6 +23,7 @@ export class ConfigContext {
         }
 
         for (const key in this.rules) {
+            if (!Object.prototype.hasOwnProperty.call(this.rules, key)) continue;
             const regex = pathToRegExp(key);
             const cache = this.rules[key].cache;
             if (cache && cache.expires) {
@@ -43,6 +46,7 @@ export class ConfigContext {
     private getConfigFromRule(path: string) {
         const _path = `/${path}/`;
         for (const key in this.rules) {
+            if (!Object.prototype.hasOwnProperty.call(this.rules, key)) continue;
             const regex = this.regexRules[key];
             if (_path.match(regex)) {
                 return this.rules[key].cache;

@@ -1,10 +1,10 @@
-import { ICacheOptions } from "../types";
+import { ICacheOptions } from '../types';
 import { Context } from '../ctx.provider';
 import { createHash } from 'crypto';
 
 function createHashKey(namespace: string, token: string) {
     return `ACP:${namespace}-${createHash('sha256').update(token).digest('hex')}`;
-};
+}
 
 export function generateKey(ns: string, ctx: Context, options: ICacheOptions) {
     if (!options || (!options.query && !options.headers)) {

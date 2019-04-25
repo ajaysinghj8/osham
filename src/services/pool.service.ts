@@ -1,13 +1,8 @@
-import { Cache } from "./cache.service";
+import { Cache } from './cache.service';
 import * as Debug from 'debug';
-import { EventEmitter } from "events";
-const logger = Debug('acp:service:pool');
+import { EventEmitter } from 'events';
 
-function nextTick() {
-    return new Promise((resolve) => {
-        process.nextTick(resolve);
-    });
-}
+const logger = Debug('acp:service:pool');
 
 export class RequestPool {
     static pool: Set<string> = new Set();

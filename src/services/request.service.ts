@@ -9,6 +9,7 @@ function onSuccessWithCtx(ctx: Context, time: number) {
         ctx.statusCode = statusCode;
         const stringData = data;
         for (const key in headers) {
+            if (!Object.prototype.hasOwnProperty.call(headers, key)) continue;
             ctx.set(key, headers[key]);
         }
         ctx.body = stringData;
@@ -31,20 +32,20 @@ export function makeRequest(ctx: Context, path: string, headers: any) {
     logger(`call server for ${path}`);
     const d1 = Date.now();
     const Axios: any = {}; /** no more axios */
-    return Axios.get(path, { headers: headers }).then(
+    return Axios.get(path, { headers }).then(
         onSuccessWithCtx(ctx, d1),
         onErrorWithCtx(ctx)
     );
 }
 
 export function errorToData(error: any) {
-    const data: any = { statusCode: 503, data: '', headers: [] };
+    const out: any = { statusCode: 503, data: '', headers: [] };
     try {
         const { message, statusCode, data, headers } = error;
         if (message) {
             return { statusCode, data, headers };
         }
-        data.data = message;
+        out.data = message;
     } catch (e) { }
-    return data;
+    return out;
 }
