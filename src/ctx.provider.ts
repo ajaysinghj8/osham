@@ -1,11 +1,15 @@
-import { IncomingMessage, ServerResponse, IncomingHttpHeaders } from "http";
-import { Stream } from "stream";
-// import { parse } from "url";
+import { IncomingMessage, ServerResponse, IncomingHttpHeaders } from 'http';
+import { Stream } from 'stream';
 import * as Debug from 'debug';
+// tslint:disable-next-line: no-var-requires
 const statuses = require('statuses');
+// tslint:disable-next-line: no-var-requires
 const qs = require('querystring');
+// tslint:disable-next-line: no-var-requires
 const logger = Debug('acp:server');
+// tslint:disable-next-line: no-var-requires
 const parse = require('parseurl');
+
 function respond() {
     logger('respond called');
     const ctx = this;
@@ -21,7 +25,7 @@ function respond() {
         return res.end();
     }
 
-    if ('HEAD' == ctx.method) {
+    if ('HEAD' === ctx.method) {
         if (!res.headersSent) {
             ctx.length = Buffer.byteLength(JSON.stringify(body));
         }
@@ -45,7 +49,6 @@ function respond() {
     res.end(body);
 }
 
-
 export interface Context {
     req: IncomingMessage;
     path: string;
@@ -66,12 +69,11 @@ export interface Context {
     statusMessage: string;
 }
 
-
-export function CtxProvider(req: IncomingMessage, res: ServerResponse) {
-    const urlParsedCache = parse(req);
+export function CtxProvider(request: IncomingMessage, res: ServerResponse) {
+    const urlParsedCache = parse(request);
     const ctx: Context = {
         /** in */
-        req,
+        req: request,
         get path() {
             return urlParsedCache.pathname;
         },

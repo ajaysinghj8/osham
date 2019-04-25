@@ -1,16 +1,15 @@
 import { Context } from '../ctx.provider';
 import * as Debug from 'debug';
-import { INameSpaceOptions } from "../types";
-import { generateKey } from "../services/genkey.service";
-import { Cache } from "../services/cache.service";
-import { RequestPool } from "../services/pool.service";
-import { ConfigContext } from "../services/Config.Context";
-import { errorToData } from "../services/request.service";
-import { respondWithCtx } from "../utils";
-import { createProxy } from "../proxy";
-
+import { INameSpaceOptions } from '../types';
+import { generateKey } from '../services/genkey.service';
+import { Cache } from '../services/cache.service';
+import { RequestPool } from '../services/pool.service';
+import { ConfigContext } from '../services/Config.Context';
+import { errorToData } from '../services/request.service';
+import { respondWithCtx } from '../utils';
+import { createProxy } from '../proxy';
+// tslint:disable-next-line: no-var-requires
 const pathToRegExp = require('path-to-regexp');
-
 
 export function createNameSpaceHandler(namespace: string, options: INameSpaceOptions) {
     const logger = Debug(`acp:handler(${namespace})`);
@@ -34,9 +33,9 @@ export function createNameSpaceHandler(namespace: string, options: INameSpaceOpt
         const proxyPath = pathToCall + (ctx.search || '');
 
         if ((ctx.method !== 'GET') || !cacheConfig) {
-            logger(`${ctx.method} ${pathToCall} ${cacheConfig ? '(No cache config)' : ''}`)
-            const proxyCtx: any = await proxyRequest(proxyPath, ctx.method, ctx.headers)
-            return proxyCtx.pipes(ctx);
+            logger(`${ctx.method} ${pathToCall} ${cacheConfig ? '(No cache config)' : ''}`);
+            const proxyCtxN: any = await proxyRequest(proxyPath, ctx.method, ctx.headers);
+            return proxyCtxN.pipes(ctx);
         }
 
         const cacheKey = generateKey(namespace, ctx, cacheConfig);
@@ -47,11 +46,11 @@ export function createNameSpaceHandler(namespace: string, options: INameSpaceOpt
         logger(`Cache miss ${pathToCall}`);
         if (!cacheConfig.pool) {
             logger(`No request pool`);
-            const proxyCtx: any = await proxyRequest(proxyPath, ctx.method, ctx.headers);
+            const proxyCtxM: any = await proxyRequest(proxyPath, ctx.method, ctx.headers);
             // async
-            proxyCtx.toPromise(ctx).then((res: any) => Cache.put(cacheKey, res.toJSON(), +cacheConfig.expires))
+            proxyCtxM.toPromise(ctx).then((res: any) => Cache.put(cacheKey, res.toJSON(), +cacheConfig.expires))
                 .catch(() => ({}));
-            return proxyCtx.pipes(ctx);
+            return proxyCtxM.pipes(ctx);
         }
 
         if (RequestPool.has(cacheKey)) {
@@ -64,10 +63,8 @@ export function createNameSpaceHandler(namespace: string, options: INameSpaceOpt
             .then((res: any) => RequestPool.putAndPublish(cacheKey, res.toJSON(), +cacheConfig.expires))
             .catch((error: any) => {
                 const response = errorToData(error);
-                RequestPool.errorAndPublish(cacheKey, response)
+                RequestPool.errorAndPublish(cacheKey, response);
             });
         return proxyCtx.pipes(ctx);
     };
 }
-
-

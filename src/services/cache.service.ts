@@ -1,10 +1,7 @@
 import * as Debug from 'debug';
 import { Redis } from '../storage/redis.store';
 
-
-
 const logger = Debug('acp:service:cache');
-
 
 export class Cache {
 
@@ -45,4 +42,3 @@ export class Cache {
         });
     }
 }
-

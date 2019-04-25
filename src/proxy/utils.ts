@@ -1,5 +1,5 @@
-import { ServerResponse, OutgoingHttpHeaders } from "http";
-import { Context } from "../ctx.provider";
+import { OutgoingHttpHeaders } from 'http';
+import { Context } from '../ctx.provider';
 
 export function writeHeaders(headers: OutgoingHttpHeaders, ctx?: Context) {
     const headersMap: any = {};
@@ -9,10 +9,8 @@ export function writeHeaders(headers: OutgoingHttpHeaders, ctx?: Context) {
     };
     const setHeader = ctx ? setCtxHeaders : (field: string, value: any) => headersMap[field] = value;
     for (const field in headers) {
-        if (field === undefined) continue;
-        const value = headers[field];
-        setHeader(String(field).trim(), value);
+        if (!Object.prototype.hasOwnProperty.call(headers, field)) continue;
+        setHeader(String(field).trim(), headers[field]);
     }
     return headersMap;
 }
-

@@ -4,7 +4,7 @@ import { join } from 'path';
 
 function supplant(o: any = {}) {
     return this.replace(/\${([^{}]*)}/g,
-        function (a: string, b: string) {
+        (a: string, b: string) => {
             const r: any = o[b];
             if (r === undefined) {
                 throw new Error(`Please set environment value of ${b}`);
@@ -20,11 +20,10 @@ export function getCacheConfig() {
         const config = safeLoad(
             supplant.call(readFileSync(configFilePath, 'utf-8'), process.env)
         );
-        //@todo : validate yml config rules
+        // @todo : validate yml config rules
         return config;
     }
     catch (e) {
-        console.log(e);
-        process.exit(1);
+        throw e;
     }
 }

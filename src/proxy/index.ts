@@ -1,4 +1,4 @@
-import { IncomingMessage, ServerResponse, ClientRequest } from 'http';
+import { IncomingMessage, ClientRequest } from 'http';
 import * as FollowRedirects from 'follow-redirects';
 import * as Http from 'http';
 import * as Https from 'https';
@@ -9,6 +9,7 @@ import { writeHeaders } from './utils';
 import { Context } from '../ctx.provider';
 
 const NativeAgents = { http: Http, https: Https };
+
 const logger = Debug('acp:service:proxy');
 export interface IProxyOptions {
     target: string;
@@ -35,7 +36,7 @@ export interface ProxyResponsePromise<T = any> extends Promise<ProxyResponse<T>>
 interface ExtendedClientRequest extends ClientRequest {
     pipes?(ctx: Context): ExtendedClientRequest;
     toPromise?(): ProxyResponsePromise<any>;
-};
+}
 
 class Proxy {
     static isSSL: RegExp = /^https/;
@@ -115,12 +116,11 @@ class Proxy {
     }
 }
 
-
 export function createProxy(options: IProxyOptions) {
     const proxy = new Proxy(options);
     return (path: string, method: string, headers: any, dataStream?: any) =>
         proxy.request(path, method, headers, dataStream);
-};
+}
 
 function pipes(ctx: Context) {
     const { response, message } = this;
@@ -146,7 +146,7 @@ function toPromise(ctx: Context) {
             statusMessage,
             headers: ctx.state.headers || writeHeaders(response.headers),
             ...proxyCtx,
-            toJSON: function () {
+            toJSON() {
                 return {
                     data: this.data,
                     statusCode: this.statusCode,
@@ -157,7 +157,7 @@ function toPromise(ctx: Context) {
             message: ''
         };
         if (!response.on) {
-            return reject({ ...ob, message: message });
+            return reject({ ...ob, message });
         }
         response.on('error', (e: any) => reject({ ...ob, message: e.message }));
         response.on('data', (chunk: any) => ob.data += chunk);
@@ -165,7 +165,7 @@ function toPromise(ctx: Context) {
             if (ob.statusCode >= 200 && ob.statusCode < 300) {
                 return resolve(ob);
             }
-            reject({ ...ob, message: message });
+            reject({ ...ob, message });
         });
     });
 }
