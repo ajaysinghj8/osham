@@ -60,7 +60,13 @@ export function createNameSpaceHandler(namespace: string, options: INameSpaceOpt
         RequestPool.add(cacheKey);
         const proxyCtx: any = await proxyRequest(proxyPath, ctx.method, ctx.headers);
         proxyCtx.toPromise(ctx)
-            .then((res: any) => RequestPool.putAndPublish(cacheKey, res.toJSON(), +cacheConfig.expires))
+            .then(
+                (res: any) => RequestPool.putAndPublish(cacheKey, res.toJSON(), +cacheConfig.expires),
+                (error: any) => {
+                    const response = errorToData(error);
+                    RequestPool.errorAndPublish(cacheKey, response);
+                }
+            )
             .catch((error: any) => {
                 const response = errorToData(error);
                 RequestPool.errorAndPublish(cacheKey, response);
