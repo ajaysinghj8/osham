@@ -19,3 +19,12 @@ export function nextTick() {
         process.nextTick(resolve);
     });
 }
+
+export function timeOutResponse(reason?: string): any {
+    return {
+        statusCode: 408,
+        statusMessage: 'Request Timeout',
+        headers: [],
+        data: reason || 'Request Timeout'
+    };
+}
