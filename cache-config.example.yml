@@ -1,16 +1,8 @@
 version: '1' # good to have for your own reference
-headers:
-  - xResponseTime # will response with x-response-time: 100 (ms)
-  - x-acp # hit|miss|pool
-xfwd: true # true/false
-changeOrigin: true #true/false
-ssl:
-  key: 'file path'
-  cert: 'file path'
 
+changeOrigin: true #true/false
 dummyRest: # namespace
   expose: '/api/v1/*' # it will be exposed to you
-  pfx: 'file path'
   target: 'http://dummy.restapiexample.com/api/v1' # will get data from here
   cache: # default cache option for above namespace
     pool: true # concurrent request will not hit the server in case of cache miss.
@@ -18,7 +10,7 @@ dummyRest: # namespace
     query: false # changes in querysting will not return diffenent results
     headers: false # changes in headers will not return different results
   rules:
-    /employee/: # overriding default cache options
+    /employees/: # overriding default cache options
       cache:
         expires: 10s # cache will last for 10 seconds
         pool: true # will use request pool
