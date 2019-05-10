@@ -7,6 +7,7 @@ import { join } from 'path';
 import * as Debug from 'debug';
 import { writeHeaders } from './utils';
 import { Context } from '../ctx.provider';
+import { createGunzip } from 'zlib';
 
 const NativeAgents = { http: Http, https: Https };
 
@@ -20,6 +21,7 @@ export interface IProxyOptions {
 }
 
 export interface ProxyResponse<T = any> {
+    [x: string]: any;
     data: T;
     statusCode: number;
     statusMessage: string;
@@ -138,34 +140,58 @@ function pipes(ctx: Context) {
 function toPromise(ctx: Context) {
     const proxyCtx = this;
     const { response, message } = proxyCtx;
+    const { statusCode, statusMessage } = response;
+    const headers = writeHeaders(response.headers);
+    const isGzip = hasGzipedResponse(headers);
+    const ob: ProxyResponse = {
+        data: '',
+        statusCode,
+        statusMessage,
+        headers,
+        isGzip,
+        ...proxyCtx,
+        toJSON() {
+            return {
+                data: this.data,
+                statusCode: this.statusCode,
+                statusMessage: this.statusMessage,
+                headers: this.headers,
+            };
+        },
+        message: ''
+    };
+
+    if (!response.on) {
+        return Promise.reject({ ...ob, message });
+    }
+
     return new Promise((resolve, reject) => {
-        const { statusCode, statusMessage } = response;
-        const ob: ProxyResponse = {
-            data: '',
-            statusCode,
-            statusMessage,
-            headers: ctx.state.headers || writeHeaders(response.headers),
-            ...proxyCtx,
-            toJSON() {
-                return {
-                    data: this.data,
-                    statusCode: this.statusCode,
-                    statusMessage: this.statusMessage,
-                    headers: this.headers
-                };
-            },
-            message: ''
-        };
-        if (!response.on) {
-            return reject({ ...ob, message });
+        if (ob.isGzip) {
+            delete ob.headers['content-encoding'];
+            response.pipe(createGunzip())
+                .on('end', onEnd)
+                .on('error', onError)
+                .on('data', (data: any) => ob.data += data.toString());
+            return;
         }
-        response.on('error', (e: any) => reject({ ...ob, message: e.message }));
-        response.on('data', (chunk: any) => ob.data += chunk);
-        response.on('end', () => {
+        response.on('error', onError)
+            .on('end', onEnd)
+            .on('data', (chunk: any) => ob.data += chunk.toString());
+        return;
+        // --end
+        function onError(e: any) {
+            return reject({ ...ob, message: e.message });
+        }
+        function onEnd() {
             if (ob.statusCode >= 200 && ob.statusCode < 300) {
                 return resolve(ob);
             }
-            reject({ ...ob, message });
-        });
+            return reject({ ...ob, message });
+        }
     });
+}
+
+function hasGzipedResponse(headers: any) {
+    const encoding = headers['content-encoding'];
+    return encoding && encoding.includes('gzip');
 }
