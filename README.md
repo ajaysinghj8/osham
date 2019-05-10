@@ -103,12 +103,12 @@ All of these problems and many more can be resolved by using Osham in your archi
 
 ## Cache Options
 
-**expose** The proxy path which will expose from osham.
+- **expose** The proxy path which will expose from osham.
 
-**target** The actual server HOST name (with path).
-**changeOrigin:** The actual request's HOST name will be passed to backend.
-**followRedirects** The HTTP/HTTPS agent will be changes to follow redirects if server has internal redirection enabled.
-**timeout** Default 5000 miliseconds.
+- **target** The actual server HOST name (with path).
+- **changeOrigin:** The actual request's HOST name will be passed to backend.
+- **followRedirects** The HTTP/HTTPS agent will be changes to follow redirects if server has internal redirection enabled.
+- **timeout** Default 5000 miliseconds.
 
 ## Use Cases
 
