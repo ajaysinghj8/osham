@@ -128,12 +128,12 @@ Centralized many servers end-points to one.
 
 ## Architecture
 
-![Osham Archtecture](https://raw.githubusercontent.com/ajaysinghj8/osham/master/public/Arch.svg)
+![Osham Archtecture](https://raw.githubusercontent.com/ajaysinghj8/osham/master/public/Arch.svg?sanitize=true&raw=true)
 
 ####
 
-![Osham Auth Arch](https://raw.githubusercontent.com/ajaysinghj8/osham/master/public/SimpleArch.svg)
+![Osham Auth Arch](https://raw.githubusercontent.com/ajaysinghj8/osham/master/public/SimpleArch.svg?sanitize=true&raw=true)
 
-#### Master/Slave Osham
+#### More Optimized Osham
 
-![Osham master slave](https://raw.githubusercontent.com/ajaysinghj8/osham/master/public/MasterSlaveOsham.svg)
+![Osham master slave](https://raw.githubusercontent.com/ajaysinghj8/osham/master/public/MasterSlaveOsham.svg?sanitize=true&raw=true)
