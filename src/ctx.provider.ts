@@ -132,7 +132,11 @@ export function CtxProvider(request: IncomingMessage, res: ServerResponse) {
         },
         set(field: string, val: any) {
             // @todo if header not send
-            this.res.setHeader(field, val);
+            try {
+                this.res.setHeader(field, val);
+            } catch (e) {
+                logger('Error set headers', field, val);
+            }
             return this;
         },
     };
