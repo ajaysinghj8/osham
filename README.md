@@ -15,15 +15,18 @@ A Configurable Proxy Cache Server.
 
 ## What is ओषम् (Osham) ?
 
-Osham is a cache service for APIs. The idea behind it is that your backend is slow and you need to support higher concurrent requests with fewer resources at fast response time.
-As in any public facing API/frontend, 90% requests remains the same and for the same request, the response will not change frequently. Then, my question to you is why to process these same requests again and again if the output gonna be the same?
+**Osham** is a cache service for APIs.
 
-Of Course, you should not be! Then what will be the possible solution for this problem? Oh yes, you should use **Cache**.
-Ok, Implementing cache can solve many problems and it will use fewer backend resources and provide a good response time.
+The idea behind Osham is to support higher concurrent requests with fewer resources and fast response time. 
 
-You might be thinking that will solve the problems.
+In a public facing API/frontend, most of the request remains the same and so the response is also the same. To avoid rendering the same request from the backend and to speed up the response time we should use **CACHE**.
 
-But in reality, what gonna happen when your backend will be hit by hundred thousand requests for the first time and all these requests will go cache miss. That will cause [thundering herd](https://en.wikipedia.org/wiki/Thundering_herd_problem) problem.
+The cache can solve many problems and it uses fewer backend resources to provide a good response time.
+
+**But that's not it.**
+
+In a real-world scenario, what happens when your backend is requested with hundreds of concurrent requests for the first time.
+In all those concurrent requests, there will be cache miss and will cause a [thundering herd](https://en.wikipedia.org/wiki/Thundering_herd_problem) problem.
 
 All of these problems and many more can be resolved by using Osham in your architecture.
 
