@@ -4,7 +4,7 @@
   "description": "A Configuration based Proxy server to cache API response.",
   "main": "lib/index.js",
   "typings": "./lib/index.d.ts",
-  "author": "ajaysinghj8 <meajaysingh@srijan.net>",
+  "author": "ajaysinghj8 <ajaysinghj8@hotmail.com>",
   "license": "MIT",
   "private": false,
   "scripts": {
