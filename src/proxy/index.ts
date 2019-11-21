@@ -96,7 +96,7 @@ class Proxy {
             port: this.target.port || this.port,
             method,
             headers: { ...headers },
-            host: this.target.host,
+            host: this.target.hostname,
             path: join(this.target.path, path)
         };
 
