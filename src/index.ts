@@ -24,7 +24,9 @@ if (process.env.TIMEOUT) {
 for (const key in cacheConfig) {
     if (!Object.prototype.hasOwnProperty.call(cacheConfig, key)) continue;
     switch (key) {
-        case 'version': break;
+        case 'version':
+        case 'changeOrigin':
+            break;
         case 'xResponseTime':
             middlewares.push(RouteTimeReqRes);
             break;
