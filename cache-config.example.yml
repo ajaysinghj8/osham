@@ -1,9 +1,9 @@
 version: '1' # good to have for your own reference
 
-changeOrigin: true #true/false
 dummyRest: # namespace
   expose: '/api/v1/*' # it will be exposed to you
   target: 'http://dummy.restapiexample.com/api/v1' # will get data from here
+  changeOrigin: true #true/false
   cache: # default cache option for above namespace
     pool: true # concurrent request will not hit the server in case of cache miss.
     expires: 5m # cache will expire in 5 minutes
