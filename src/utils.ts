@@ -1,4 +1,5 @@
 import { Context } from './ctx.provider';
+import { INameSpaceOptions } from './types';
 
 export function respondWithCtx(ctx: Context) {
     return ({ statusCode, headers, data }: any) => {
@@ -27,4 +28,13 @@ export function timeOutResponse(reason?: string): any {
         headers: [],
         data: reason || 'Request Timeout'
     };
+}
+
+
+export function isNameSpace(key: string, options: INameSpaceOptions): boolean {
+    if (typeof key !== 'string') return false;
+    if (!options) return false;
+    if (typeof options !== 'object') return false;
+    if (!options.expose || !options.target) return false;
+    return true;
 }

@@ -7,6 +7,7 @@ import { RouteTimeReqRes } from './middlewares/responseTime';
 import { createNameSpaceHandler } from './middlewares/nameSpaceHandler';
 import { CtxProvider } from './ctx.provider';
 import * as compose from 'koa-compose';
+import { isNameSpace } from './utils';
 // import { timeoutMiddlewareProvider } from './middlewares/timeoutMiddleware';
 
 const middlewares: Array<any> = [];
@@ -32,7 +33,10 @@ for (const key in cacheConfig) {
             break;
         default:
             // it is namespace
-            middlewares.push(createNameSpaceHandler(key, cacheConfig[key]));
+            const options = cacheConfig[key];
+            if (isNameSpace(key, options)) {
+                middlewares.push(createNameSpaceHandler(key, options));
+            }
     }
 }
 
