@@ -101,7 +101,7 @@ All of these problems and many more can be resolved by using Osham in your archi
   ```
 
 - Open http://localhost:26192/api/v1/employees in the browser.
-  Cache Server will hit the http://dummy.restapiexample.com/api/v1/employess.
+  Cache Server will hit the http://dummy.restapiexample.com/api/v1/employees .
   It will cache the result for the next 5 minutes as per over about cache configuration.
 
 ## Cache Options
