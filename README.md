@@ -6,6 +6,10 @@
 A Configurable Proxy Cache Server.
 
 ```
+npx osham
+```
+
+```
  npm i -g osham
 ```
 
