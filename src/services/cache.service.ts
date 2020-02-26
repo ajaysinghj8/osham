@@ -21,6 +21,7 @@ export class Cache {
     }
 
     static get(key: string) {
+        if(!Cache.isConnected()) throw new Error('Unable to connect Cache storage.');
         return new Promise((resolve, reject) => {
             Redis.get(key, (error, buffer) => {
                 if (error || !buffer) {
