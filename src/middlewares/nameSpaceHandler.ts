@@ -53,11 +53,12 @@ export function createNameSpaceHandler(namespace: string, options: INameSpaceOpt
             return proxyCtxM.pipes(ctx);
         }
 
-        if (RequestPool.has(cacheKey)) {
+        if (RequestPool.has(cacheKey) && Cache.isConnected()) {
             return RequestPool.wait(cacheKey).then(respondWithCtx(ctx));
         }
-
-        RequestPool.add(cacheKey);
+        if (Cache.isConnected()) {
+            RequestPool.add(cacheKey);
+        }
         const proxyCtx: any = await proxyRequest(proxyPath, ctx.method, ctx.headers);
         proxyCtx.toPromise(ctx)
             .then(
