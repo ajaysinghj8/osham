@@ -4,6 +4,7 @@ import { Server } from './server';
 import { IncomingMessage, ServerResponse } from 'http';
 import { getCacheConfig } from './config.reader';
 import { RouteTimeReqRes } from './middlewares/responseTime';
+import { HealthCheck } from './middlewares/healthCheck';
 import { createNameSpaceHandler } from './middlewares/nameSpaceHandler';
 import { CtxProvider } from './ctx.provider';
 import * as compose from 'koa-compose';
@@ -30,6 +31,9 @@ for (const key in cacheConfig) {
             break;
         case 'xResponseTime':
             middlewares.push(RouteTimeReqRes);
+            break;
+        case 'health':
+            middlewares.push(HealthCheck);
             break;
         default:
             // it is namespace
