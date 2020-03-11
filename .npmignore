@@ -20,3 +20,4 @@ tslint.json
 Dockerfile
 cache-config.yml
 node_modules
+yarn-error.log
