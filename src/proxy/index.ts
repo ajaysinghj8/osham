@@ -168,16 +168,8 @@ function toPromise(ctx: Context) {
   }
 
   return new Promise((resolve, reject) => {
-    if (ob.isGzip) {
-      delete ob.headers['content-encoding'];
-      response
-        .pipe(createGunzip())
-        .on('end', onEnd)
-        .on('error', onError)
-        .on('data', (data: any) => (ob.data += data.toString()));
-      return;
-    }
-    response
+    const stream = ob.isGzip ? response.pipe(createGunzip()) : response;
+    stream
       .on('error', onError)
       .on('end', onEnd)
       .on('data', (chunk: any) => (ob.data += chunk.toString()));
@@ -187,6 +179,12 @@ function toPromise(ctx: Context) {
       return reject({ ...ob, message: e.message });
     }
     function onEnd() {
+      if (ob.isGzip) {
+        delete ob.headers['content-encoding'];
+        if (ob.data) {
+          ob.headers['content-length'] = ob.data.length;
+        }
+      }
       if (ob.statusCode >= 200 && ob.statusCode < 300) {
         return resolve(ob);
       }
