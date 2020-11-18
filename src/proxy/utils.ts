@@ -12,6 +12,7 @@ export function writeHeaders(headers: OutgoingHttpHeaders, ctx?: Context) {
     if (!Object.prototype.hasOwnProperty.call(headers, field)) continue;
     const value = headers[field];
     const val = Array.isArray(value) ? value.map(String) : String(value);
+    if (!val) continue;
     setHeader(String(field).trim(), val);
   }
   return headersMap;
