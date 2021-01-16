@@ -6,8 +6,9 @@ import { parse, UrlWithStringQuery } from 'url';
 import { join } from 'path';
 import * as Debug from 'debug';
 import { writeHeaders } from './utils';
-import { Context } from '../ctx.provider';
 import { createGunzip } from 'zlib';
+import { IContext } from '../types';
+import { Stream } from 'stream';
 
 const NativeAgents = { http: Http, https: Https };
 
@@ -20,32 +21,57 @@ export interface IProxyOptions {
   timeout?: number;
 }
 
-export interface ProxyResponse<T = any> {
-  [x: string]: any;
+export interface IProxyResponse<T = unknown> {
+  [x: string]: unknown;
   data: T;
   statusCode: number;
   statusMessage: string;
-  headers: any;
+  headers: Record<string, string>;
   request?: ExtendedClientRequest;
   response?: IncomingMessage;
-  toJSON?: () => ProxyResponse<T>;
+  toJSON?: () => IProxyResponse<T>;
   message?: string;
 }
 
-export interface ProxyResponsePromise<T = any> extends Promise<ProxyResponse<T>> {}
+export type ProxyResponsePromise<T = unknown> = Promise<IProxyResponse<T>>;
 
 interface ExtendedClientRequest extends ClientRequest {
-  pipes?(ctx: Context): ExtendedClientRequest;
-  toPromise?(): ProxyResponsePromise<any>;
+  pipes?(ctx: IContext): ExtendedClientRequest;
+  toPromise?(): ProxyResponsePromise<unknown>;
+}
+
+interface IErrorRespone {
+  statusCode: number;
+  statusMessage: string;
+  headers: Record<string, string>;
+}
+
+interface IProxyReponseCtx {
+  pipes: (ctx: IContext) => IProxyReponseCtx;
+  toPromise: () => Promise<IProxyResponse>;
+  proxy: Proxy;
+  request: ClientRequest | FollowRedirects.RedirectableRequest<ClientRequest, IncomingMessage>;
+  response: IErrorRespone | IncomingMessage;
+  message: string;
 }
 
 class Proxy {
-  static isSSL: RegExp = /^https/;
-  static upgradeHeader: RegExp = /(^|,)\s*upgrade\s*($|,)/i;
-  static ErrorResponse: any = { statusCode: 503, statusMessage: 'Service Unavailable', headers: {} };
+  static isSSL = /^https/;
+  static upgradeHeader = /(^|,)\s*upgrade\s*($|,)/i;
+  static ErrorResponse: IErrorRespone = { statusCode: 503, statusMessage: 'Service Unavailable', headers: {} };
 
-  private isSecure: boolean = false;
-  private agent: any;
+  private isSecure = false;
+  private agent:
+    | typeof Https
+    | typeof Http
+    | FollowRedirects.Override<
+        typeof Https,
+        FollowRedirects.RedirectScheme<Https.RequestOptions, ClientRequest, IncomingMessage>
+      >
+    | FollowRedirects.Override<
+        typeof Http,
+        FollowRedirects.RedirectScheme<Http.RequestOptions, ClientRequest, IncomingMessage>
+      >;
   private port: number;
   private target: UrlWithStringQuery;
 
@@ -57,16 +83,21 @@ class Proxy {
     this.agent = this.isSecure ? agents.https : agents.http;
   }
 
-  request(path: string, method: string, headers: any, dataStream?: any) {
+  request(
+    path: string,
+    method: string,
+    headers: Record<string, string>,
+    dataStream?: Stream,
+  ): Promise<IProxyReponseCtx> {
     logger(`Request(${method}) ${path}`);
-    const proxyCtx = {
+    const proxyCtx: Partial<IProxyReponseCtx> = {
       pipes,
       toPromise,
-      prxoy: this,
+      proxy: this,
     };
     try {
       const options = this.getRequestOptions(path, method, headers);
-      const request: ExtendedClientRequest = this.agent.request(options);
+      const request = this.agent.request(options);
       if (this.options.timeout) {
         request.setTimeout(this.options.timeout, () => request.abort());
       }
@@ -74,15 +105,25 @@ class Proxy {
         dataStream.pipe(request);
       }
       request.end();
-      return new Promise((resolve, reject) => {
+      return new Promise(resolve => {
         request.on('response', (response: IncomingMessage) => {
-          resolve({ ...proxyCtx, request, response });
+          resolve({ ...proxyCtx, request, response } as IProxyReponseCtx);
         });
         request.on('error', (e: Error) =>
-          resolve({ ...proxyCtx, request, response: { ...Proxy.ErrorResponse }, message: e.message }),
+          resolve({
+            ...proxyCtx,
+            request,
+            response: { ...Proxy.ErrorResponse },
+            message: e.message,
+          } as IProxyReponseCtx),
         );
         request.on('abort', (e: Error) =>
-          resolve({ ...proxyCtx, request, response: { ...Proxy.ErrorResponse }, message: e.message }),
+          resolve({
+            ...proxyCtx,
+            request,
+            response: { ...Proxy.ErrorResponse },
+            message: e.message,
+          } as IProxyReponseCtx),
         );
       });
     } catch (e) {
@@ -90,12 +131,12 @@ class Proxy {
         ...proxyCtx,
         message: e.message,
         response: { ...Proxy.ErrorResponse },
-      });
+      } as IProxyReponseCtx);
     }
   }
 
-  private getRequestOptions(path: string, method: string, headers: any) {
-    const options: any = {
+  private getRequestOptions(path: string, method: string, headers: Record<string, string>) {
+    const options = {
       port: this.target.port || this.port,
       method,
       headers: { ...headers },
@@ -120,18 +161,20 @@ class Proxy {
   }
 }
 
-export function createProxy(options: IProxyOptions) {
+export function createProxy(
+  options: IProxyOptions,
+): (path: string, method: string, headers: Http.IncomingHttpHeaders, dataStream?: Stream) => Promise<IProxyReponseCtx> {
   const proxy = new Proxy(options);
-  return (path: string, method: string, headers: any, dataStream?: any) =>
+  return (path: string, method: string, headers: Record<string, string>, dataStream?: Stream) =>
     proxy.request(path, method, headers, dataStream);
 }
 
-function pipes(ctx: Context) {
-  const { response, message } = this;
+function pipes(ctx: IContext) {
+  const { response, message } = this as IProxyReponseCtx;
   const { statusCode, statusMessage, headers } = response;
   ctx.statusCode = statusCode;
   ctx.statusMessage = statusMessage;
-  ctx.state.headers = writeHeaders(headers, ctx);
+  ctx.state = writeHeaders(headers, ctx);
   ctx.body = message || response;
   /** if not res.headersSent */
   /** @TODO:: ctx.setHeaders */
@@ -139,19 +182,18 @@ function pipes(ctx: Context) {
   return this;
 }
 
-function toPromise(ctx: Context) {
-  const proxyCtx = this;
-  const { response, message } = proxyCtx;
+function toPromise(): Promise<IProxyResponse<unknown>> {
+  const { response, message } = this as IProxyReponseCtx;
   const { statusCode, statusMessage } = response;
   const headers = writeHeaders(response.headers);
   const isGzip = hasGzipedResponse(headers);
-  const ob: ProxyResponse = {
+  const ob: IProxyResponse<string> = {
     data: '',
     statusCode,
     statusMessage,
     headers,
     isGzip,
-    ...proxyCtx,
+    ...this,
     toJSON() {
       return {
         data: this.data,
@@ -163,7 +205,7 @@ function toPromise(ctx: Context) {
     message: '',
   };
 
-  if (!response.on) {
+  if (!(response instanceof IncomingMessage)) {
     return Promise.reject({ ...ob, message });
   }
 
@@ -172,17 +214,17 @@ function toPromise(ctx: Context) {
     stream
       .on('error', onError)
       .on('end', onEnd)
-      .on('data', (chunk: any) => (ob.data += chunk.toString()));
+      .on('data', (chunk: string) => (ob.data += chunk.toString()));
     return;
     // --end
-    function onError(e: any) {
+    function onError(e: Error) {
       return reject({ ...ob, message: e.message });
     }
     function onEnd() {
       if (ob.isGzip) {
         delete ob.headers['content-encoding'];
         if (ob.data) {
-          ob.headers['content-length'] = ob.data.length;
+          ob.headers['content-length'] = ob.data.length.toString();
         }
       }
       if (ob.statusCode >= 200 && ob.statusCode < 300) {
@@ -193,7 +235,7 @@ function toPromise(ctx: Context) {
   });
 }
 
-function hasGzipedResponse(headers: any) {
+function hasGzipedResponse(headers: Record<string, string>) {
   const encoding = headers['content-encoding'];
   return encoding && encoding.includes('gzip');
 }

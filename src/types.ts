@@ -1,3 +1,5 @@
+import { IncomingHttpHeaders, IncomingMessage, ServerResponse } from 'http';
+
 interface BaseICacheOptions {
   expires?: number | string;
   query?: false | Array<string>;
@@ -20,4 +22,41 @@ export interface INameSpaceOptions {
   timeout?: number;
   rules: IRulesOptions;
   cache: ICacheOptions;
+}
+
+export interface IInternalResponse {
+  statusCode: number;
+  headers: Record<string, string>;
+  data: string;
+  statusMessage?: string;
+  message?: string;
+}
+
+export interface IParentConfig {
+  version: string;
+  xResponseTime: boolean;
+  health: boolean;
+  changeOrigin: boolean;
+}
+
+export type ICacheConfig = IParentConfig | { [key: string]: INameSpaceOptions };
+
+export interface IContext {
+  req: IncomingMessage;
+  path: string;
+  headers: IncomingHttpHeaders;
+  method: string;
+  querystring: string;
+  query: Record<string, string>;
+  search: string;
+  get: (field: string) => string;
+
+  res: ServerResponse;
+  set: (field: string, val: string) => IContext;
+  respond: () => void;
+  body: unknown;
+  state: Record<string, string>;
+  writable: boolean;
+  statusCode: number;
+  statusMessage: string;
 }

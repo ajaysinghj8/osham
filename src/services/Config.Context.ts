@@ -1,10 +1,9 @@
+/* eslint-disable @typescript-eslint/no-var-requires */
 import { ICacheOptions, IRulesOptions } from '../types';
-// tslint:disable-next-line: no-var-requires
 const pathToRegExp = require('path-to-regexp');
-// tslint:disable-next-line: no-var-requires
 const parseToMs = require('parse-duration');
 
-function memo(fn: Function) {
+function memo(fn: CallableFunction) {
   const store = new Map();
   return function memoFn(path: string) {
     if (store.has(path)) return store.get(path);
@@ -14,7 +13,7 @@ function memo(fn: Function) {
   };
 }
 export class ConfigContext {
-  private regexRules: any = {};
+  private regexRules: Record<string, string> = {};
 
   constructor(private cacheOption: ICacheOptions, private rules: IRulesOptions) {
     if (this.cacheOption && this.cacheOption.expires) {

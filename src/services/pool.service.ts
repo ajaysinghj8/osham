@@ -11,15 +11,15 @@ export class RequestPool {
   static pool: Set<string> = new Set();
   static ee: EventEmitter = new EventEmitter().setMaxListeners(Infinity);
 
-  static has(key: string) {
+  static has(key: string): boolean {
     return RequestPool.pool.has(key);
   }
-  static add(key: string) {
+  static add(key: string): RequestPool {
     RequestPool.pool.add(key);
     return RequestPool;
   }
 
-  static wait(key: string) {
+  static wait(key: string): Promise<unknown> {
     logger(`wating for ${key}`);
     return new Promise(resolve => {
       const timeout = setTimeout(() => {
@@ -29,7 +29,7 @@ export class RequestPool {
         handler(timeOutResponse('RequestPool failed'));
       }, TIMEOUT);
 
-      function handler(data: any) {
+      function handler(data: unknown) {
         clearTimeout(timeout);
         resolve(data);
         logger(`respond for ${key}`);
@@ -39,7 +39,7 @@ export class RequestPool {
     });
   }
 
-  static async putAndPublish(key: string, data: any, expires: number) {
+  static async putAndPublish(key: string, data: unknown, expires: number): Promise<unknown> {
     logger(`putting and publishing for ${key}`);
     RequestPool.pool.delete(key);
     RequestPool.ee.emit(key, data);
@@ -47,7 +47,7 @@ export class RequestPool {
     return data;
   }
 
-  static async errorAndPublish(key: string, data: any) {
+  static async errorAndPublish(key: string, data: unknown): Promise<void> {
     logger(`error and publishing for ${key}`);
     RequestPool.pool.delete(key);
     RequestPool.ee.emit(key, data);

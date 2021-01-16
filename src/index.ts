@@ -9,9 +9,11 @@ import { createNameSpaceHandler } from './middlewares/nameSpaceHandler';
 import { CtxProvider } from './ctx.provider';
 import * as compose from 'koa-compose';
 import { isNameSpace } from './utils';
+import { INameSpaceOptions, IContext } from './types';
+import { ComposedMiddleware } from 'koa-compose';
 // import { timeoutMiddlewareProvider } from './middlewares/timeoutMiddleware';
 
-const middlewares: Array<any> = [];
+const middlewares: Array<ComposedMiddleware<IContext>> = [];
 const cacheConfig = getCacheConfig();
 
 // /**
@@ -22,7 +24,6 @@ const cacheConfig = getCacheConfig();
 if (process.env.TIMEOUT) {
   // middlewares.push(timeoutMiddlewareProvider(+process.env.TIMEOUT));
 }
-
 for (const key in cacheConfig) {
   if (!Object.prototype.hasOwnProperty.call(cacheConfig, key)) continue;
   switch (key) {
@@ -35,20 +36,21 @@ for (const key in cacheConfig) {
     case 'health':
       middlewares.push(HealthCheck);
       break;
-    default:
+    default: {
       // it is namespace
-      const options = cacheConfig[key];
+      const options: INameSpaceOptions = Reflect.get(cacheConfig, key);
       if (isNameSpace(key, options)) {
         middlewares.push(createNameSpaceHandler(key, options));
       }
+    }
   }
 }
 
 Server.on('request', async (req: IncomingMessage, res: ServerResponse) => {
   const ctx = CtxProvider(req, res);
-  const fnMiddleware = compose(middlewares);
+  const chain = compose(middlewares);
   res.statusCode = 404;
-  const onerror = (err: any) => res.end(err);
+  const onerror = (err: string) => res.end(err);
   const handleResponse = () => ctx.respond();
-  return fnMiddleware(ctx).then(handleResponse).catch(onerror);
+  return chain(ctx).then(handleResponse).catch(onerror);
 });

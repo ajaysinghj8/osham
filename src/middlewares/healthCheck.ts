@@ -1,6 +1,7 @@
-import { Context } from '../ctx.provider';
+import * as Koa from 'koa';
+import { IContext } from '../types';
 
-export async function HealthCheck(ctx: Context, next: any) {
+export async function HealthCheck(ctx: IContext, next: Koa.Next): Promise<void> {
   if (ctx.path === '/health') {
     ctx.body = 'ok';
     ctx.statusCode = 200;
