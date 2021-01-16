@@ -6,7 +6,7 @@ import { parse, UrlWithStringQuery } from 'url';
 import { join } from 'path';
 import * as Debug from 'debug';
 import { writeHeaders } from './utils';
-import { createGunzip } from 'zlib';
+import { createGunzip, createBrotliDecompress } from 'zlib';
 import { IContext } from '../types';
 import { Stream } from 'stream';
 
@@ -187,13 +187,11 @@ function toPromise(): Promise<IProxyResponse<unknown>> {
   const { response, message } = this as IProxyReponseCtx;
   const { statusCode, statusMessage } = response;
   const headers = writeHeaders(response.headers);
-  const isGzip = hasGzipedResponse(headers);
   const ob: IProxyResponse<string> = {
     data: '',
     statusCode,
     statusMessage,
     headers,
-    isGzip,
     ...this,
     toJSON() {
       return {
@@ -211,7 +209,7 @@ function toPromise(): Promise<IProxyResponse<unknown>> {
   }
 
   return new Promise((resolve, reject) => {
-    const stream = ob.isGzip ? response.pipe(createGunzip()) : response;
+    const stream = withDecoder(ob);
     stream
       .on('error', onError)
       .on('end', onEnd)
@@ -222,7 +220,7 @@ function toPromise(): Promise<IProxyResponse<unknown>> {
       return reject({ ...ob, message: e.message });
     }
     function onEnd() {
-      if (ob.isGzip) {
+      if (ob.isEncoded) {
         delete ob.headers['content-encoding'];
         if (ob.data) {
           ob.headers['content-length'] = ob.data.length.toString();
@@ -236,7 +234,18 @@ function toPromise(): Promise<IProxyResponse<unknown>> {
   });
 }
 
-function hasGzipedResponse(headers: Record<string, string>) {
-  const encoding = headers['content-encoding'];
-  return encoding && encoding.includes('gzip');
+function withDecoder(ob: IProxyResponse<string>) {
+  const encoding = ob.headers['content-encoding']?.trim();
+  if (!encoding) {
+    return ob.response;
+  }
+  ob.isEncoded = true;
+  if (encoding === 'gzip') {
+    return ob.response.pipe(createGunzip());
+  }
+  if (encoding === 'br') {
+    return ob.response.pipe(createBrotliDecompress());
+  }
+  logger(`Encoding ${encoding} not handled properly!`);
+  return ob.response;
 }
