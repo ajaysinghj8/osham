@@ -7,13 +7,13 @@ dummyRest: # namespace
   changeOrigin: true #true/false
   cache: # default cache option for above namespace
     pool: true # concurrent request will not hit the server in case of cache miss.
-    expires: 5m # cache will expire in 5 minutes
+    expires: 10s # cache will expire in 10 seconds
     query: false # changes in querysting will not return diffenent results
     headers: false # changes in headers will not return different results
   rules:
     /employees/: # overriding default cache options
       cache:
-        expires: 10s # cache will last for 10 seconds
+        expires: 1m # cache will last for 1 minute
         pool: true # will use request pool
         query: # results will be different for below query params
           - limit
@@ -21,3 +21,5 @@ dummyRest: # namespace
           - alphabet
         headers:
           - x-locale # results will be different for x-locale header value
+    /employee/2/:
+      cache: false
