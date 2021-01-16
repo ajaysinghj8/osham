@@ -1,144 +1,135 @@
-import { IncomingMessage, ServerResponse, IncomingHttpHeaders } from 'http';
+import { IncomingHttpHeaders, IncomingMessage, ServerResponse } from 'http';
 import { Stream } from 'stream';
 import * as Debug from 'debug';
-// tslint:disable-next-line: no-var-requires
-const statuses = require('statuses');
-// tslint:disable-next-line: no-var-requires
-const qs = require('querystring');
-// tslint:disable-next-line: no-var-requires
+import * as statuses from 'statuses';
+import * as parse from 'parseurl';
+import qs = require('querystring');
+import { IContext } from './types';
+
 const logger = Debug('acp:server');
-// tslint:disable-next-line: no-var-requires
-const parse = require('parseurl');
 
-function respond() {
-    logger('respond called');
-    const ctx = this;
-    if (!ctx.writable) return;
+export class Context implements IContext {
+  private urlParsedCache;
+  private _querycache: Record<string, string> = {};
+  public responseHeaders = {};
+  public body: unknown = null;
+  constructor(public req: IncomingMessage, public res: ServerResponse) {
+    this.urlParsedCache = parse(req);
+  }
 
-    const res = ctx.res;
-    let body = ctx.body;
-    const code = ctx.statusCode;
+  get path(): string {
+    return this.urlParsedCache.pathname;
+  }
+
+  get headers(): IncomingHttpHeaders {
+    return this.req.headers;
+  }
+
+  get method(): string {
+    return this.req.method;
+  }
+
+  get querystring(): string {
+    if (!this.req) return '';
+    return (this.urlParsedCache.query || '') as string;
+  }
+
+  get search(): string {
+    if (!this.querystring) return '';
+    return `?${this.querystring}`;
+  }
+
+  public get(field: string): string {
+    const req = this.req;
+    switch ((field = field.toLowerCase())) {
+      case 'referer':
+      case 'referrer':
+        return (req.headers.referrer || req.headers.referer || '') as string;
+      default:
+        return (req.headers[field] || '') as string;
+    }
+  }
+
+  get query(): Record<string, string> {
+    const str = this.querystring;
+    if (Reflect.has(this._querycache, str)) {
+      return Reflect.get(this._querycache, str);
+    }
+    const val: Record<string, string> = (qs.parse(str) as unknown) as Record<string, string>;
+    Reflect.set(this._querycache, str, { value: val });
+    return val;
+  }
+
+  get statusCode(): number {
+    return this.res.statusCode;
+  }
+  set statusCode(code: number) {
+    this.res.statusCode = code;
+  }
+  get statusMessage(): string {
+    return this.res.statusMessage;
+  }
+  set statusMessage(msg: string) {
+    this.res.statusMessage = msg;
+  }
+  get writable(): boolean {
+    if (this.res.writableEnded) return false;
+    const socket = this.res.socket;
+    if (!socket) return true;
+    return socket.writable;
+  }
+  set(field: string, val: string): Context {
+    // @todo if header not send
+    try {
+      this.res.setHeader(field, val);
+    } catch (e) {
+      logger('Error set headers', field, val);
+    }
+    return this;
+  }
+
+  respond(): void {
+    logger('responding');
+    if (!this.writable) return;
+
+    const res = this.res;
+    const body = this.body;
+    const code = this.statusCode;
     // ignore body
     if (statuses.empty[code]) {
-        // strip headers
-        ctx.body = null;
-        return res.end();
+      // strip headers
+      this.body = null;
+      return res.end();
     }
 
-    if ('HEAD' === ctx.method) {
-        if (!res.headersSent) {
-            ctx.length = Buffer.byteLength(JSON.stringify(body));
-        }
-        return res.end();
+    if ('HEAD' === this.method) {
+      if (!res.headersSent) {
+        // ctx.length = Buffer.byteLength(JSON.stringify(body));
+      }
+      return res.end();
     }
 
     // status body
-    if (null == body) {
-        if (ctx.req.httpVersionMajor >= 2) {
-            body = String(code);
-        } else {
-            body = ctx.message || String(code);
-        }
-        if (!res.headersSent) {
-            ctx.type = 'text';
-            ctx.length = Buffer.byteLength(body);
-        }
-        return res.end(body);
+    // if (null == body) {
+    //   if (ctx.req.httpVersionMajor >= 2) {
+    //     body = String(code);
+    //   } else {
+    //     body = ctx.message || String(code);
+    //   }
+    //   if (!res.headersSent) {
+    //     ctx.type = 'text';
+    //     ctx.length = Buffer.byteLength(body);
+    //   }
+    //   return res.end(body);
+    // }
+    if (body instanceof Stream) {
+      body.pipe(res);
+      return;
     }
-    if (body instanceof Stream) return body.pipe(res);
     res.end(body);
+  }
 }
 
-export interface Context {
-    req: IncomingMessage;
-    path: string;
-    headers: IncomingHttpHeaders;
-    method: string;
-    querystring: string;
-    query: any;
-    search: string;
-    get: (field: string) => string;
-
-    res: ServerResponse;
-    set: (field: string, val: any) => Context;
-    respond: () => any;
-    body: any;
-    state: any;
-    writable: boolean;
-    statusCode: number;
-    statusMessage: string;
-}
-
-export function CtxProvider(request: IncomingMessage, res: ServerResponse) {
-    const urlParsedCache = parse(request);
-    const ctx: Context = {
-        /** in */
-        req: request,
-        get path() {
-            return urlParsedCache.pathname;
-        },
-        get headers() {
-            return this.req.headers;
-        },
-        get method() {
-            return this.req.method;
-        },
-        get querystring() {
-            if (!this.req) return '';
-            return urlParsedCache.query || '';
-        },
-        get search() {
-            if (!this.querystring) return '';
-            return `?${this.querystring}`;
-        },
-        get(field: string) {
-            const req = this.req;
-            switch (field = field.toLowerCase()) {
-                case 'referer':
-                case 'referrer':
-                    return req.headers.referrer || req.headers.referer || '';
-                default:
-                    return req.headers[field] || '';
-            }
-        },
-        get query() {
-            const str = this.querystring;
-            const c = this._querycache = this._querycache || {};
-            return c[str] || (c[str] = qs.parse(str));
-        },
-
-        /** out */
-        res,
-        body: null,
-        state: {},
-        get statusCode() {
-            return this.res.statusCode;
-        },
-        set statusCode(code: number) {
-            this.res.statusCode = code;
-        },
-        get statusMessage() {
-            return this.res.statusMessage;
-        },
-        set statusMessage(msg: string) {
-            this.res.statusMessage = msg;
-        },
-        respond,
-        get writable() {
-            if (this.res.finished) return false;
-            const socket = this.res.socket;
-            if (!socket) return true;
-            return socket.writable;
-        },
-        set(field: string, val: any) {
-            // @todo if header not send
-            try {
-                this.res.setHeader(field, val);
-            } catch (e) {
-                logger('Error set headers', field, val);
-            }
-            return this;
-        },
-    };
-    return ctx;
+export function CtxProvider(request: IncomingMessage, response: ServerResponse): IContext {
+  return new Context(request, response);
 }
