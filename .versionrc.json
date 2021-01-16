@@ -1,0 +1,43 @@
+{
+  "name": "conventionalcommits",
+  "types": [
+    {
+      "type": "feat",
+      "section": "🚀 Features"
+    },
+    {
+      "type": "fix",
+      "section": "🐛 Bug Fixes"
+    },
+    {
+      "type": "chore",
+      "hidden": false,
+      "section": "🛠 Maintenance"
+    },
+    {
+      "type": "docs",
+      "hidden": false,
+      "section": "📃 Documentation"
+    },
+    {
+      "type": "refactor",
+      "hidden": false,
+      "section": "🔄 Refactors"
+    },
+    {
+      "type": "perf",
+      "hidden": false,
+      "section": "🏎 Performance"
+    },
+    {
+      "type": "spec",
+      "hidden": false,
+      "section": "🤖 Specification"
+    }
+  ],
+  "issuePrefixes": ["#"],
+  "issueUrlFormat": "{{host}}/{{owner}}/{{repository}}/issues/{{id}}",
+  "commitUrlFormat": "{{host}}/{{owner}}/{{repository}}/commit/{{hash}}",
+  "compareUrlFormat": "{{host}}/{{owner}}/{{repository}}/compare/{{previousTag}}...{{currentTag}}",
+  "userUrlFormat": "{{host}}/{{user}}"
+}
