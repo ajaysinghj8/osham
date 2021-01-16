@@ -47,7 +47,7 @@ interface IErrorRespone {
 }
 
 interface IProxyReponseCtx {
-  pipes: (ctx: IContext) => IProxyReponseCtx;
+  pipes: (ctx: IContext, osham_headers?: Record<string, string>) => IProxyReponseCtx;
   toPromise: () => Promise<IProxyResponse>;
   proxy: Proxy;
   request: ClientRequest | FollowRedirects.RedirectableRequest<ClientRequest, IncomingMessage>;
@@ -169,12 +169,13 @@ export function createProxy(
     proxy.request(path, method, headers, dataStream);
 }
 
-function pipes(ctx: IContext) {
+function pipes(ctx: IContext, osham_headers: Record<string, string> = {}) {
   const { response, message } = this as IProxyReponseCtx;
   const { statusCode, statusMessage, headers } = response;
   ctx.statusCode = statusCode;
   ctx.statusMessage = statusMessage;
-  ctx.state = writeHeaders(headers, ctx);
+  ctx.responseHeaders = writeHeaders(headers, ctx);
+  writeHeaders(osham_headers, ctx);
   ctx.body = message || response;
   /** if not res.headersSent */
   /** @TODO:: ctx.setHeaders */

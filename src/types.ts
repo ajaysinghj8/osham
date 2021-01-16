@@ -55,7 +55,7 @@ export interface IContext {
   set: (field: string, val: string) => IContext;
   respond: () => void;
   body: unknown;
-  state: Record<string, string>;
+  responseHeaders: Record<string, string>;
   writable: boolean;
   statusCode: number;
   statusMessage: string;

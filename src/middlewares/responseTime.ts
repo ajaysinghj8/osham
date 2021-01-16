@@ -5,5 +5,5 @@ export async function RouteTimeReqRes(ctx: IContext, next: Koa.Next): Promise<vo
   const start = +new Date();
   await next();
   const ms = +new Date() - start;
-  ctx.set('X-Response-Time', `${ms}ms`);
+  ctx.set('x-osham-time', `${ms}ms`);
 }

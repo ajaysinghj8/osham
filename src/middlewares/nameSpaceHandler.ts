@@ -6,7 +6,9 @@ import { RequestPool } from '../services/pool.service';
 import { ConfigContext } from '../services/Config.Context';
 import { respondWithCtx, errorToData } from '../utils';
 import { createProxy } from '../proxy';
+
 import * as Koa from 'koa';
+import { OshamHeaders } from '../osham.headers';
 // eslint-disable-next-line
 const pathToRegExp = require('path-to-regexp');
 
@@ -33,19 +35,20 @@ export function createNameSpaceHandler(
 
     const cacheConfig = configContext.getCacheConfig(pathToCall);
     const proxyPath = pathToCall + (ctx.search || '');
-
     if (ctx.method !== 'GET' || !cacheConfig) {
       logger(`${ctx.method} ${pathToCall} ${cacheConfig ? '(No cache config)' : ''}`);
       const proxyCtxN = await proxyRequest(proxyPath, ctx.method, ctx.headers);
-      return proxyCtxN.pipes(ctx);
+      return proxyCtxN.pipes(ctx, OshamHeaders.notConfigured(ctx.method));
     }
 
     const cacheKey = generateKey(namespace, ctx, cacheConfig);
+    const oshamHeaders = new OshamHeaders(cacheKey);
     logger(`Cache Check ${pathToCall}`);
     try {
-      return await Cache.get(cacheKey).then(respondWithCtx(ctx));
-      // eslint-disable-next-line no-empty
-    } catch (e) {}
+      return await Cache.get(cacheKey).then(respondWithCtx(ctx, oshamHeaders.setHit(true).toRecords()));
+    } catch (e) {
+      oshamHeaders.setHit(false);
+    }
     logger(`Cache miss ${pathToCall}`);
     if (!cacheConfig.pool) {
       logger(`No request pool`);
@@ -55,11 +58,12 @@ export function createNameSpaceHandler(
         .toPromise()
         .then(res => Cache.put(cacheKey, res.toJSON(), +cacheConfig.expires))
         .catch(() => ({}));
-      return proxyCtxM.pipes(ctx);
+      return proxyCtxM.pipes(ctx, oshamHeaders.toRecords());
     }
 
     if (RequestPool.has(cacheKey) && Cache.isConnected()) {
-      return RequestPool.wait(cacheKey).then(respondWithCtx(ctx));
+      oshamHeaders.setPooled(true);
+      return RequestPool.wait(cacheKey).then(respondWithCtx(ctx, oshamHeaders.toRecords()));
     }
     if (Cache.isConnected()) {
       RequestPool.add(cacheKey);
@@ -78,6 +82,6 @@ export function createNameSpaceHandler(
         const response = errorToData(error);
         RequestPool.errorAndPublish(cacheKey, response);
       });
-    return proxyCtx.pipes(ctx);
+    return proxyCtx.pipes(ctx, oshamHeaders.setPooledMain(true).toRecords());
   };
 }

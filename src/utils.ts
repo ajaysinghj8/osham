@@ -1,11 +1,15 @@
 import { IInternalResponse, INameSpaceOptions, IContext } from './types';
 
-export function respondWithCtx(ctx: IContext) {
+export function respondWithCtx(ctx: IContext, osham_headers: Record<string, string> = {}) {
   return ({ statusCode, headers, data }: IInternalResponse): IInternalResponse => {
     ctx.statusCode = statusCode;
     for (const key in headers) {
       if (!Object.prototype.hasOwnProperty.call(headers, key)) continue;
       ctx.set(key, String(headers[key]));
+    }
+    for (const key in osham_headers) {
+      if (!Object.prototype.hasOwnProperty.call(osham_headers, key)) continue;
+      ctx.set(key, String(osham_headers[key]));
     }
     ctx.body = data;
     return {

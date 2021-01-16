@@ -11,7 +11,7 @@ const logger = Debug('acp:server');
 export class Context implements IContext {
   private urlParsedCache;
   private _querycache: Record<string, string> = {};
-  public state = {};
+  public responseHeaders = {};
   public body: unknown = null;
   constructor(public req: IncomingMessage, public res: ServerResponse) {
     this.urlParsedCache = parse(req);
@@ -89,7 +89,7 @@ export class Context implements IContext {
   }
 
   respond(): void {
-    logger('respond called');
+    logger('responding');
     if (!this.writable) return;
 
     const res = this.res;
