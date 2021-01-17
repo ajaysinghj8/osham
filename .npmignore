@@ -3,11 +3,10 @@ e2e
 .env
 
 !lib
-
+!yarn.lock
 
 # configuration
 package-lock.json
-yarn.lock
 tslint.json
 tsconfig.json
 .prettierrc
@@ -21,3 +20,13 @@ Dockerfile
 cache-config.yml
 node_modules
 yarn-error.log
+
+.versionrc.json
+
+CHANGELOG.md
+
+test
+
+.eslintrc
+
+public
