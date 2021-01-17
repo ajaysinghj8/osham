@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [1.0.1](https://github.com/ajaysinghj8/osham/compare/v1.0.0...v1.0.1) (2021-01-17)
+
+
+### 🐛 Bug Fixes
+
+* es6 module loading problem from bin ([a2bd89a](https://github.com/ajaysinghj8/osham/commit/a2bd89a2008e0a8f9ad4c0785452dc693e89bc51))
+* npm ignore and disable ts source map ([0d08544](https://github.com/ajaysinghj8/osham/commit/0d08544a659085cd48697422cf5ea22205c422e2))
+
 ## [1.0.0](https://github.com/ajaysinghj8/osham/compare/v0.1.1...v1.0.0) (2021-01-17)
 
 
