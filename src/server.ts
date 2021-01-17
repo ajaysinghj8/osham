@@ -18,6 +18,8 @@ function createAServer() {
 
 export const Server = createAServer();
 
-Server.listen(+process.env.PORT || 26192, () => {
-  logger(`listing on ${process.env.PORT}`);
+const port = +process.env.PORT || 26192;
+
+Server.listen(port, () => {
+  logger(`listing on ${port}`);
 });
