@@ -11,7 +11,11 @@
     "start": "node lib/index.js",
     "build": "rm -rf lib && tsc",
     "lint": "eslint 'src/**/*.ts'",
-    "test": "mocha"
+    "test": "mocha",
+    "release": "standard-version",
+    "release:minor": "standard-version --release-as minor",
+    "release:patch": "standard-version --release-as patch",
+    "release:major": "standard-version --release-as major"
   },
   "bugs": {
     "url": "https://github.com/ajaysinghj8/osham/issues"
@@ -51,6 +55,7 @@
     "mocha": "^8.2.1",
     "mocha-typescript": "^1.1.17",
     "prettier": "^2.2.1",
+    "standard-version": "^9.1.0",
     "supertest": "^6.1.1",
     "ts-node": "^9.1.1",
     "typescript": "^4.1.3"
