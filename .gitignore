@@ -62,7 +62,7 @@ typings/
 
 lib
 
-cache-config.yml
 
 .vscode
 .temp
+.DS_Store
