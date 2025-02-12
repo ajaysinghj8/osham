@@ -1,4 +1,4 @@
-FROM node:18.16.0
+FROM node:iron-slim
 
 WORKDIR /usr/src/app
 
