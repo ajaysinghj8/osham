@@ -51,7 +51,7 @@ export function createNameSpaceHandler(
     }
     logger(`Cache miss ${pathToCall}`);
     if (!cacheConfig.pool) {
-      logger(`No request pool`);
+      logger(`[POOL] No request pool`);
       const proxyCtxM = await proxyRequest(proxyPath, ctx.method, ctx.headers);
       // async
       proxyCtxM
@@ -62,11 +62,14 @@ export function createNameSpaceHandler(
     }
 
     if (RequestPool.has(cacheKey) && Cache.isConnected()) {
+      logger(`[POOL] Follower request for ${cacheKey}`);
       oshamHeaders.setPooled(true);
       return RequestPool.wait(cacheKey).then(respondWithCtx(ctx, oshamHeaders.toRecords()));
     }
     if (Cache.isConnected()) {
+      logger(`[POOL] Main request for ${cacheKey}`);
       RequestPool.add(cacheKey);
+      oshamHeaders.setPooledMain(true);
     }
     const proxyCtx = await proxyRequest(proxyPath, ctx.method, ctx.headers);
     proxyCtx
@@ -82,6 +85,6 @@ export function createNameSpaceHandler(
         const response = errorToData(error);
         RequestPool.errorAndPublish(cacheKey, response);
       });
-    return proxyCtx.pipes(ctx, oshamHeaders.setPooledMain(true).toRecords());
+    return proxyCtx.pipes(ctx, oshamHeaders.toRecords());
   };
 }
