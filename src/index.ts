@@ -5,6 +5,7 @@ import { IncomingMessage, ServerResponse } from 'http';
 import { getCacheConfig } from './config.reader';
 import { RouteTimeReqRes } from './middlewares/responseTime';
 import { HealthCheck } from './middlewares/healthCheck';
+import { PurgeCache } from './middlewares/purgeCache';
 import { createNameSpaceHandler } from './middlewares/nameSpaceHandler';
 import { CtxProvider } from './ctx.provider';
 import * as compose from 'koa-compose';
@@ -35,6 +36,11 @@ for (const key in cacheConfig) {
       break;
     case 'health':
       middlewares.push(HealthCheck);
+      break;
+    case 'purge':
+      if (Reflect.get(cacheConfig, key) === true) {
+        middlewares.push(PurgeCache);
+      }
       break;
     default: {
       // it is namespace

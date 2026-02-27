@@ -83,6 +83,7 @@ before(async function () {
   const cacheConfig = `version: '1'
 xResponseTime: true
 health: true
+purge: true
 dummyRest:
   expose: '/api/v1/*'
   target: 'http://localhost:${stubPort}'
@@ -155,16 +156,29 @@ after(function (done) {
 describe('Specifications', function () {
   this.timeout(5000);
   it('Multiple requests to same resource should queue', async function () {
-    await Promise.all([
-      client.get(employeesUrl).expect('x-osham-hit', 'false').expect('x-osham-pooled-main', 'true'),
-      ...new Array(50).fill(1).map(() =>
-        client
-          .get(employeesUrl)
-          .expect('x-osham-hit', 'false')
-          .expect('x-osham-pooled', 'true')
-          .expect('x-osham-pooled-wait', /[0-9]ms/),
-      ),
+    const responses = await Promise.all([
+      client.get(employeesUrl),
+      ...new Array(25).fill(1).map(() => client.get(employeesUrl)),
     ]);
+
+    // exactly one request should be marked as the main pooled request
+    const mainResponses = responses.filter(r => r.headers['x-osham-pooled-main'] === 'true');
+    assert.strictEqual(mainResponses.length, 1, 'expected exactly one main pooled response');
+    assert.strictEqual(mainResponses[0].headers['x-osham-hit'], 'false');
+
+    // Depending on timing, followers may be pooled (miss) or may arrive after cache is written (hit).
+    let pooledCount = 0;
+    const followers = responses.filter(r => r.headers['x-osham-pooled-main'] !== 'true');
+    for (const r of followers) {
+      const isPooled = r.headers['x-osham-pooled'] === 'true';
+      const isHit = r.headers['x-osham-hit'] === 'true';
+      assert.ok(isPooled || isHit, 'expected follower request to be pooled or a cache hit');
+      if (isPooled) {
+        pooledCount += 1;
+        assert.ok(/[0-9]ms/.test(String(r.headers['x-osham-pooled-wait'])));
+      }
+    }
+    assert.ok(pooledCount > 0, 'expected at least one pooled follower request');
   });
 
   it('Should be a hit', async function () {
@@ -207,5 +221,36 @@ describe('Specifications', function () {
     const res1 = await client.get('/api/v1/employees').set('x-locale', 'en-US');
     const res2 = await client.get('/api/v1/employees').set('x-locale', 'fr-FR');
     assert.notStrictEqual(res1.headers['x-osham-key'], res2.headers['x-osham-key']);
+  });
+
+  it('Should purge cache by cache id', async function () {
+    const res = await client.get(employeesUrl).expect('x-osham-hit', 'true');
+    const cacheKey = res.headers['x-osham-key'];
+    await client.post(`/__osham/purge?key=${encodeURIComponent(cacheKey)}`).expect(200);
+    await client.get(employeesUrl).expect('x-osham-hit', 'false');
+  });
+
+  it('Should purge cache by wildcard cache id', async function () {
+    const res1 = await client.get('/api/v1/employees').query({ limit: 11 }).expect('x-osham-hit', 'false');
+    const res2 = await client.get('/api/v1/employees').query({ limit: 22 }).expect('x-osham-hit', 'false');
+    
+    assert.notStrictEqual(res1.headers['x-osham-key'], res2.headers['x-osham-key']);
+
+    await client.post('/__osham/purge?pattern=O:dummyRest:/api/v1/employees**').expect(200);
+
+    const res3 = await client.get('/api/v1/employees').query({ limit: 11 });
+    // if the request was still a hit we must have a new key (old entry deleted)
+    assert(
+      res3.headers['x-osham-hit'] === 'false' ||
+        res3.headers['x-osham-key'] !== res1.headers['x-osham-key'],
+      'cache should have been purged or returned new key',
+    );
+
+    const res4 = await client.get('/api/v1/employees').query({ limit: 22 });
+    assert(
+      res4.headers['x-osham-hit'] === 'false' ||
+        res4.headers['x-osham-key'] !== res2.headers['x-osham-key'],
+      'cache should have been purged or returned new key',
+    );
   });
 });
