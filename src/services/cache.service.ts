@@ -2,6 +2,7 @@ import * as Debug from 'debug';
 import { IStorage } from '../storage/IStorage';
 import { MemStore } from '../storage/mem.store';
 import { RedisClientProvider } from '../storage/redis.store';
+import { Metrics } from './metrics.service';
 
 const logger = Debug('acp:service:cache');
 
@@ -31,6 +32,22 @@ export class Cache {
           return reject(new Error(`Cache not found for key ${key}`));
         }
         logger('From cache ->', key);
+        return resolve(JSON.parse(buffer.toString()) as T);
+      });
+    });
+  }
+
+  static getWithMetrics<T>(key: string, namespace: string): Promise<T> {
+    if (!Cache.isConnected()) throw new Error('Unable to connect Cache storage.');
+    return new Promise((resolve, reject) => {
+      this.store.get(key, (error, buffer) => {
+        if (error || !buffer) {
+          logger('failed cache ->', key);
+          Metrics.recordCacheMiss(namespace);
+          return reject(new Error(`Cache not found for key ${key}`));
+        }
+        logger('From cache ->', key);
+        Metrics.recordCacheHit(namespace);
         return resolve(JSON.parse(buffer.toString()) as T);
       });
     });

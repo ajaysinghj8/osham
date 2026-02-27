@@ -84,6 +84,7 @@ before(async function () {
 xResponseTime: true
 health: true
 purge: true
+metrics: true
 dummyRest:
   expose: '/api/v1/*'
   target: 'http://localhost:${stubPort}'
@@ -252,5 +253,13 @@ describe('Specifications', function () {
         res4.headers['x-osham-key'] !== res2.headers['x-osham-key'],
       'cache should have been purged or returned new key',
     );
+  });
+
+  it('Metrics endpoint should expose Prometheus metrics', async function () {
+    const res = await client.get('/__osham/metrics').expect(200);
+    assert.strictEqual(res.headers['content-type'], 'text/plain; version=0.0.4');
+    assert(res.text.includes('osham_cache_hits_total'), 'metrics should include cache hits counter');
+    assert(res.text.includes('osham_cache_misses_total'), 'metrics should include cache misses counter');
+    assert(res.text.includes('dummyRest'), 'metrics should include namespace labels');
   });
 });

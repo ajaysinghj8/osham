@@ -37,6 +37,7 @@ export interface IParentConfig {
   xResponseTime: boolean;
   health: boolean;
   purge?: boolean;
+  metrics?: boolean;
   changeOrigin: boolean;
 }
 

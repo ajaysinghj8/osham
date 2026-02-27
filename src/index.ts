@@ -6,6 +6,7 @@ import { getCacheConfig } from './config.reader';
 import { RouteTimeReqRes } from './middlewares/responseTime';
 import { HealthCheck } from './middlewares/healthCheck';
 import { PurgeCache } from './middlewares/purgeCache';
+import { MetricsEndpoint } from './middlewares/metricsEndpoint';
 import { createNameSpaceHandler } from './middlewares/nameSpaceHandler';
 import { CtxProvider } from './ctx.provider';
 import * as compose from 'koa-compose';
@@ -40,6 +41,11 @@ for (const key in cacheConfig) {
     case 'purge':
       if (Reflect.get(cacheConfig, key) === true) {
         middlewares.push(PurgeCache);
+      }
+      break;
+    case 'metrics':
+      if (Reflect.get(cacheConfig, key) === true) {
+        middlewares.push(MetricsEndpoint);
       }
       break;
     default: {

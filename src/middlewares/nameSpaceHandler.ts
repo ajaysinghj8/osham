@@ -45,7 +45,7 @@ export function createNameSpaceHandler(
     const oshamHeaders = new OshamHeaders(cacheKey);
     logger(`Cache Check ${pathToCall}`);
     try {
-      return await Cache.get(cacheKey).then(respondWithCtx(ctx, oshamHeaders.setHit(true).toRecords()));
+      return await Cache.getWithMetrics(cacheKey, namespace).then(respondWithCtx(ctx, oshamHeaders.setHit(true).toRecords()));
     } catch (e) {
       oshamHeaders.setHit(false);
     }
