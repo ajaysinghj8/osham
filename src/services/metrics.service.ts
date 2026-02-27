@@ -53,12 +53,7 @@ export class Metrics {
   }
 
   // Record request duration
-  static recordRequestDuration(
-    namespace: string,
-    method: string,
-    status: number,
-    durationSeconds: number
-  ): void {
+  static recordRequestDuration(namespace: string, method: string, status: number, durationSeconds: number): void {
     this.requestDuration.labels(namespace, method, String(status)).observe(durationSeconds);
   }
 

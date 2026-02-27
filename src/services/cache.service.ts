@@ -68,7 +68,7 @@ export class Cache {
       throw new Error('Unable to connect Cache storage.');
     }
 
-    const anyStore = this.store as unknown as {
+    const anyStore = (this.store as unknown) as {
       purgeByPattern?: (p: string, cb: (error: unknown, reply: number) => void) => void;
       scan?: (...args: unknown[]) => void;
       del?: (...args: unknown[]) => void;

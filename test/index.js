@@ -234,7 +234,7 @@ describe('Specifications', function () {
   it('Should purge cache by wildcard cache id', async function () {
     const res1 = await client.get('/api/v1/employees').query({ limit: 11 }).expect('x-osham-hit', 'false');
     const res2 = await client.get('/api/v1/employees').query({ limit: 22 }).expect('x-osham-hit', 'false');
-    
+
     assert.notStrictEqual(res1.headers['x-osham-key'], res2.headers['x-osham-key']);
 
     await client.post('/__osham/purge?pattern=O:dummyRest:/api/v1/employees**').expect(200);
@@ -242,15 +242,13 @@ describe('Specifications', function () {
     const res3 = await client.get('/api/v1/employees').query({ limit: 11 });
     // if the request was still a hit we must have a new key (old entry deleted)
     assert(
-      res3.headers['x-osham-hit'] === 'false' ||
-        res3.headers['x-osham-key'] !== res1.headers['x-osham-key'],
+      res3.headers['x-osham-hit'] === 'false' || res3.headers['x-osham-key'] !== res1.headers['x-osham-key'],
       'cache should have been purged or returned new key',
     );
 
     const res4 = await client.get('/api/v1/employees').query({ limit: 22 });
     assert(
-      res4.headers['x-osham-hit'] === 'false' ||
-        res4.headers['x-osham-key'] !== res2.headers['x-osham-key'],
+      res4.headers['x-osham-hit'] === 'false' || res4.headers['x-osham-key'] !== res2.headers['x-osham-key'],
       'cache should have been purged or returned new key',
     );
   });

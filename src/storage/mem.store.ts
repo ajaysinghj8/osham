@@ -1,12 +1,15 @@
+import * as Debug from 'debug';
 import { minimatch } from 'minimatch';
 import { IStorage } from './IStorage';
+
+const logger = Debug('acp:store:mem');
 
 export class MemStore implements IStorage {
   public connected = true;
   private expired = new Map();
   private cache = new Map();
 
-  constructor(private ttl_sec: number) { }
+  constructor(private ttl_sec: number) {}
   public get(key: string, cb: (error: unknown, buffer: string) => void): void {
     if (!this.expired.has(key)) {
       return cb(new Error('Not found'), null);
@@ -44,17 +47,15 @@ export class MemStore implements IStorage {
       this.expired.delete(key);
       deleted += 1;
     }
-    
-    cb(null, deleted);
 
+    cb(null, deleted);
   }
   public purgeByPattern(pattern: string, cb: (error: unknown, reply: number) => void): void {
     try {
       this._purgeByPattern(pattern, cb);
     } catch (e) {
-      console.error(`[purgeByPattern] Error: ${e?.message}`);
+      logger(`[purgeByPattern] Error: ${e?.message}`);
       cb(e, 0);
     }
   }
 }
-
