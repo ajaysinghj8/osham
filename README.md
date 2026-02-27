@@ -50,6 +50,7 @@ version: '1'
 xResponseTime: true
 health: true
 purge: true
+metrics: true
 dummyRest:
   expose: '/api/v1/*'
   target: 'http://localhost:3000'
@@ -80,6 +81,28 @@ Osham provides an admin endpoint to invalidate cache by exact key or by pattern.
 - [Purge Cache](docs/purge-cache.md)
 
 Key format: `O:<NAMESPACE>:<PATH>[:<VARIANT_HASH>]` (variant hash is SHA1 hex).
+
+## Metrics (Prometheus)
+
+Enable Prometheus metrics to monitor cache performance:
+
+```yaml
+version: '1'
+metrics: true
+# ... rest of config
+```
+
+Access metrics at `/__osham/metrics` (Prometheus text format). Exposed metrics include:
+
+- **osham_cache_hits_total** — cumulative cache hits (by namespace)
+- **osham_cache_misses_total** — cumulative cache misses (by namespace)
+- **osham_request_duration_seconds** — request latency histogram (by namespace, method, HTTP status)
+- **osham_pooled_requests** — current number of pooled requests (by namespace)
+- **osham_cache_size_bytes** — current cache size in bytes (by namespace)
+
+Scrape this endpoint from your Prometheus instance to track cache efficiency and identify optimization opportunities. See the detailed guide:
+
+- [Metrics](docs/metrics.md)
 
 ## When to use Osham
 
