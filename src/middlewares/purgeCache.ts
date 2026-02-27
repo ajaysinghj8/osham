@@ -38,4 +38,3 @@ export async function PurgeCache(ctx: IContext, next: Koa.Next): Promise<void> {
     ctx.body = JSON.stringify({ error: e?.message || 'purge_failed' });
   }
 }
-

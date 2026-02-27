@@ -1,7 +1,8 @@
 /* eslint-disable @typescript-eslint/no-var-requires */
 import { ICacheOptions, IRulesOptions } from '../types';
 const pathToRegExp = require('path-to-regexp');
-const parseToMs = require('parse-duration');
+// the package exports a default parse function since v2
+const parseToMs = require('parse-duration').default || require('parse-duration');
 
 function memo(fn: CallableFunction) {
   const store = new Map();
