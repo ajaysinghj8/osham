@@ -1,12 +1,13 @@
 import { ICacheOptions, IContext } from '../types';
 import { createHash } from 'crypto';
 
-const hasher = createHash('sha1');
 function createHashKey(namespace: string, path: string, token?: string) {
   if (!token) {
     return `O:${namespace}:${path}`;
   }
-  return `O:${namespace}:${path}:${hasher.update(token).digest('base64')}`;
+  // `crypto.Hash` instances cannot be reused after `digest()`.
+  const digest = createHash('sha1').update(token).digest('base64');
+  return `O:${namespace}:${path}:${digest}`;
 }
 
 export function generateKey(ns: string, ctx: IContext, options: ICacheOptions): string {
