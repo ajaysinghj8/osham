@@ -1,3 +1,4 @@
+import { minimatch } from 'minimatch';
 import { IStorage } from './IStorage';
 
 export class MemStore implements IStorage {
@@ -5,7 +6,7 @@ export class MemStore implements IStorage {
   private expired = new Map();
   private cache = new Map();
 
-  constructor(private ttl_sec: number) {}
+  constructor(private ttl_sec: number) { }
   public get(key: string, cb: (error: unknown, buffer: string) => void): void {
     if (!this.expired.has(key)) {
       return cb(new Error('Not found'), null);
@@ -34,4 +35,26 @@ export class MemStore implements IStorage {
   public expire(key: string, ttl_sec: number): void {
     this.expired.set(key, Date.now() + ttl_sec * 1000);
   }
+
+  private _purgeByPattern(pattern: string, cb: (error: unknown, reply: number) => void): void {
+    let deleted = 0;
+    for (const key of this.cache.keys()) {
+      if (!minimatch(String(key), pattern)) continue;
+      this.cache.delete(key);
+      this.expired.delete(key);
+      deleted += 1;
+    }
+    
+    cb(null, deleted);
+
+  }
+  public purgeByPattern(pattern: string, cb: (error: unknown, reply: number) => void): void {
+    try {
+      this._purgeByPattern(pattern, cb);
+    } catch (e) {
+      console.error(`[purgeByPattern] Error: ${e?.message}`);
+      cb(e, 0);
+    }
+  }
 }
+

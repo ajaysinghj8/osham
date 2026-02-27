@@ -4,4 +4,5 @@ export interface IStorage {
   get: (key: string, cb: (error: unknown, buffer: string) => void) => void;
   del: (key: string, cb: (error: unknown, reply: number) => void) => void;
   expire: (key: string, ttl: number) => void;
+  purgeByPattern?: (pattern: string, cb: (error: unknown, reply: number) => void) => void;
 }

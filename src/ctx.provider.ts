@@ -10,7 +10,7 @@ const logger = Debug('acp:server');
 
 export class Context implements IContext {
   private urlParsedCache;
-  private _querycache: Record<string, string> = {};
+  private _querycache: Record<string, Record<string, string>> = {};
   public responseHeaders = {};
   public body: unknown = null;
   constructor(public req: IncomingMessage, public res: ServerResponse) {
@@ -56,7 +56,7 @@ export class Context implements IContext {
       return Reflect.get(this._querycache, str);
     }
     const val: Record<string, string> = (qs.parse(str) as unknown) as Record<string, string>;
-    Reflect.set(this._querycache, str, { value: val });
+    Reflect.set(this._querycache, str, val);
     return val;
   }
 
