@@ -6,7 +6,9 @@ function createHashKey(namespace: string, path: string, token?: string) {
     return `O:${namespace}:${path}`;
   }
   // `crypto.Hash` instances cannot be reused after `digest()`.
-  const digest = createHash('sha1').update(token).digest('base64');
+  // use hex digest to avoid characters like '/' and '+' which interfere with
+  // glob matching during purge. hex is safe for wildcard patterns.
+  const digest = createHash('sha1').update(token).digest('hex');
   return `O:${namespace}:${path}:${digest}`;
 }
 
