@@ -9,6 +9,7 @@ const os = require('os');
 const path = require('path');
 const assert = require('assert');
 const supertest = require('supertest');
+const adminAudit = require('../lib/admin.audit');
 
 let stubServer;
 let oshamServer;
@@ -127,6 +128,8 @@ restrictedRest:
   process.env.SECURE = 'false';
 
   process.chdir(tempDir);
+  adminAudit.configureAdminAuditForTests(path.join(tempDir, '.osham-admin-audit.jsonl'));
+  adminAudit.clearAdminAuditForTests();
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   require('../lib/index');
   // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -140,6 +143,7 @@ restrictedRest:
 
 after(function (done) {
   try {
+    adminAudit.clearAdminAuditForTests();
     if (originalCwd) process.chdir(originalCwd);
   } catch (e) {
     // ignore
@@ -1174,6 +1178,25 @@ describe('Admin API – Config Endpoints', function () {
     assert.strictEqual(body.ok, true);
     assert.ok(Array.isArray(body.data));
     assert.ok(body.data.some(event => event.action === 'admin.purge'));
+  });
+
+  it('GET /__osham/admin/audit should survive process restarts via disk-backed storage', async function () {
+    const auditFile = path.join(tempDir, '.osham-admin-audit.jsonl');
+    adminAudit.configureAdminAuditForTests(auditFile);
+    adminAudit.clearAdminAuditForTests();
+
+    await client
+      .post('/__osham/admin/purge')
+      .set('x-osham-admin-secret', ADMIN_SECRET)
+      .send({ pattern: 'O:dummyRest:/employees*', dryRun: true })
+      .expect(200);
+
+    assert.ok(fs.existsSync(auditFile), 'audit file should be written to disk');
+
+    adminAudit.configureAdminAuditForTests(auditFile);
+    const reloaded = adminAudit.reloadAdminAuditEvents();
+    assert.ok(Array.isArray(reloaded));
+    assert.ok(reloaded.some(event => event.action === 'admin.purge'));
   });
 
   it('Unknown admin route should return 404 with ok:false', async function () {
