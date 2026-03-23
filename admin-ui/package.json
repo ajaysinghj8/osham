@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "clean": "find src -type f \\( -name '*.js' -o -name '*.d.ts' \\) -delete && rm -f vite.config.js vite.config.d.ts tsconfig.tsbuildinfo",
+    "build": "npm run clean && tsc -b && vite build",
     "preview": "vite preview"
   },
   "dependencies": {
