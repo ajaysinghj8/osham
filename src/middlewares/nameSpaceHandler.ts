@@ -35,15 +35,20 @@ export function createNameSpaceHandler(
     logger(`${pathToCall} will be processed!`);
 
     // Allow/deny pattern enforcement: deny wins over allow.
-    // Normalize to an absolute path so patterns like '/employees/**' match consistently.
-    const matchPath = pathToCall.startsWith('/') ? pathToCall : `/${pathToCall}`;
-    if (options.deny && options.deny.some(pattern => minimatch(matchPath, pattern))) {
+    // Normalize to an absolute path. We try matching both /path and /path/ so that
+    // patterns like '/employees/**' match whether the request ends with '/' or not,
+    // and patterns like '/employee/*' correctly reject deeper paths like '/employee/5/sub'.
+    const raw = pathToCall.startsWith('/') ? pathToCall : `/${pathToCall}`;
+    const matchPath = raw;
+    const matchPathAlt = raw.endsWith('/') && raw.length > 1 ? raw.slice(0, -1) : `${raw}/`;
+    const matchesAny = (pattern: string) => minimatch(matchPath, pattern) || minimatch(matchPathAlt, pattern);
+    if (options.deny && options.deny.some(matchesAny)) {
       ctx.statusCode = 403;
       ctx.set('x-osham-cache', 'denied');
       ctx.body = 'Forbidden';
       return ctx.respond();
     }
-    if (options.allow && !options.allow.some(pattern => minimatch(matchPath, pattern))) {
+    if (options.allow && !options.allow.some(matchesAny)) {
       ctx.statusCode = 403;
       ctx.set('x-osham-cache', 'denied');
       ctx.body = 'Forbidden';

@@ -20,6 +20,31 @@ const logger = Debug('acp:index');
 const middlewares: Array<ComposedMiddleware<IContext>> = [];
 const { globalConfig, namespaces } = getCacheConfig();
 
+// Startup summary — always visible so operators know exactly what loaded.
+const enabledFeatures =
+  (['xResponseTime', 'health', 'purge', 'metrics', 'changeOrigin'] as const).filter(f => globalConfig[f]).join(', ') ||
+  'none';
+// eslint-disable-next-line no-console
+console.log(`[osham] Config v${globalConfig.version} loaded. Features: ${enabledFeatures}`);
+for (const [ns, opts] of Object.entries(namespaces)) {
+  const cacheInfo =
+    opts.cache === false
+      ? 'cache=disabled'
+      : opts.cache
+      ? `cache expires=${opts.cache.expires ?? 'default'}${opts.cache.pool ? ' pool=on' : ''}`
+      : 'cache=unconfigured';
+  // eslint-disable-next-line no-console
+  console.log(`[osham] Namespace "${ns}": ${opts.expose} → ${opts.target} (${cacheInfo})`);
+  if (opts.allow?.length) {
+    // eslint-disable-next-line no-console
+    console.log(`[osham]   allow: ${opts.allow.join(', ')}`);
+  }
+  if (opts.deny?.length) {
+    // eslint-disable-next-line no-console
+    console.log(`[osham]   deny:  ${opts.deny.join(', ')}`);
+  }
+}
+
 if (process.env.TIMEOUT) {
   // middlewares.push(timeoutMiddlewareProvider(+process.env.TIMEOUT));
 }

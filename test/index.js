@@ -198,6 +198,37 @@ describe('Allow/Deny URL Patterns', function () {
     assert.strictEqual(res.status, 403);
     assert.strictEqual(res.headers['x-osham-cache'], 'denied');
   });
+
+  // Trailing-slash edge cases
+  it('Should allow a path with a trailing slash that matches /employees/**', async function () {
+    // /restricted/employees/ → pathToCall=employees/ → normalised to /employees → matches /employees/**
+    const res = await client.get('/restricted/employees/');
+    assert.notStrictEqual(res.status, 403, 'trailing-slash path should be allowed, not 403');
+  });
+
+  it('Should deny a path with a trailing slash that would only match deny pattern', async function () {
+    // /restricted/employees/private/ → normalised → /employees/private → deny /employees/private/**
+    const res = await client.get('/restricted/employees/private/');
+    assert.strictEqual(res.status, 403);
+    assert.strictEqual(res.headers['x-osham-cache'], 'denied');
+  });
+
+  // Single-star depth enforcement: /employee/* must NOT match paths with more than one segment.
+  it('Should deny a deep path that only single-star allow pattern exists for', async function () {
+    // /restricted/employee/5/sub → pathToCall=employee/5/sub → /employee/5/sub
+    // Does not match /employees/** (different prefix) and does not match /employee/* (too deep)
+    const res = await client.get('/restricted/employee/5/sub');
+    assert.strictEqual(res.status, 403);
+    assert.strictEqual(res.headers['x-osham-cache'], 'denied');
+  });
+
+  // Nested precedence: deny deeper path wins even if parent allow matches.
+  it('Should deny a nested deny path even when a parent glob allow matches', async function () {
+    // /employees/** allow matches /employees/admin/data, but /employees/private/** deny also matches
+    const res = await client.get('/restricted/employees/private/admin/data');
+    assert.strictEqual(res.status, 403);
+    assert.strictEqual(res.headers['x-osham-cache'], 'denied');
+  });
 });
 
 describe('Startup Validation', function () {
@@ -458,6 +489,102 @@ describe('Config Validation', function () {
         assert.deepStrictEqual(cfg.namespaces.myNs.deny, ['/employees/private/**']);
       },
     );
+  });
+
+  it('Should warn on unknown keys in a namespace', function () {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { validateConfig } = require('../lib/config.reader');
+    const warnings = [];
+    const originalWarn = console.warn;
+    console.warn = (...args) => warnings.push(args.join(' '));
+    try {
+      validateConfig({
+        version: '1',
+        myNs: { expose: '/api/*', target: 'http://localhost:3000', unknownField: 'oops', anotherBad: 42 },
+      });
+    } finally {
+      console.warn = originalWarn;
+    }
+    assert.ok(
+      warnings.some(w => w.includes('unknown key') && w.includes('"unknownField"')),
+      'should warn about unknownField',
+    );
+    assert.ok(
+      warnings.some(w => w.includes('unknown key') && w.includes('"anotherBad"')),
+      'should warn about anotherBad',
+    );
+  });
+
+  it('Should not warn on known namespace keys', function () {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { validateConfig } = require('../lib/config.reader');
+    const warnings = [];
+    const originalWarn = console.warn;
+    console.warn = (...args) => warnings.push(args.join(' '));
+    try {
+      validateConfig({
+        version: '1',
+        myNs: {
+          expose: '/api/*',
+          target: 'http://localhost:3000',
+          cache: { expires: '10s' },
+          allow: ['/foo/**'],
+          deny: ['/foo/private/**'],
+        },
+      });
+    } finally {
+      console.warn = originalWarn;
+    }
+    assert.strictEqual(warnings.length, 0, 'should have no warnings for known keys');
+  });
+});
+
+describe('Purge Safety', function () {
+  this.timeout(5000);
+
+  it('Should include a warning when purging with a broad pattern (no namespace prefix)', async function () {
+    const res = await client.post('/__osham/purge?pattern=*').expect(200);
+    const body = JSON.parse(res.text);
+    assert.ok(body.warning, 'should return a warning for a broad pattern');
+    assert.ok(body.warning.includes('O:<namespace>'), 'warning should mention O:<namespace> prefix');
+  });
+
+  it('Should include a warning when purging with a bare ** pattern', async function () {
+    const res = await client.post('/__osham/purge?pattern=**').expect(200);
+    const body = JSON.parse(res.text);
+    assert.ok(body.warning, 'should return a warning for ** pattern');
+  });
+
+  it('Should NOT include a warning when purging with a namespaced pattern', async function () {
+    const res = await client.post('/__osham/purge?pattern=O:dummyRest:/api/v1/*').expect(200);
+    const body = JSON.parse(res.text);
+    assert.ok(!body.warning, 'should not warn for a properly prefixed pattern');
+  });
+
+  it('Should return 401 when OSHAM_PURGE_SECRET is set but header is missing', async function () {
+    process.env.OSHAM_PURGE_SECRET = 'test-secret-abc';
+    try {
+      const res = await client.post('/__osham/purge?pattern=O:dummyRest:*');
+      assert.strictEqual(res.status, 401);
+      const body = JSON.parse(res.text);
+      assert.ok(body.error.includes('Unauthorized'), 'should return unauthorized error');
+    } finally {
+      delete process.env.OSHAM_PURGE_SECRET;
+    }
+  });
+
+  it('Should allow purge when OSHAM_PURGE_SECRET matches the header', async function () {
+    process.env.OSHAM_PURGE_SECRET = 'test-secret-abc';
+    try {
+      const res = await client
+        .post('/__osham/purge?pattern=O:dummyRest:/api/v1/*')
+        .set('x-osham-purge-secret', 'test-secret-abc')
+        .expect(200);
+      const body = JSON.parse(res.text);
+      assert.strictEqual(typeof body.deleted, 'number', 'should return deleted count');
+    } finally {
+      delete process.env.OSHAM_PURGE_SECRET;
+    }
   });
 });
 

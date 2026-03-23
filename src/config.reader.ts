@@ -15,6 +15,19 @@ function supplant(o = {}) {
 
 const RESERVED_KEYS = new Set(['version', 'xResponseTime', 'health', 'purge', 'metrics', 'changeOrigin']);
 
+const KNOWN_NAMESPACE_KEYS = new Set([
+  'expose',
+  'target',
+  'port',
+  'timeout',
+  'followRedirects',
+  'changeOrigin',
+  'cache',
+  'rules',
+  'allow',
+  'deny',
+]);
+
 function validateCacheOptions(value: unknown, context: string): ICacheOptions {
   if (value === false || value === undefined || value === null) {
     return value === false ? false : undefined;
@@ -123,6 +136,16 @@ export function validateConfig(config: unknown): IFullConfig {
             `cache-config.yml: namespace "${ns}": "${listField}" must be an array of glob pattern strings`,
           );
         }
+      }
+    }
+
+    for (const key of Object.keys(nsCfg)) {
+      if (!KNOWN_NAMESPACE_KEYS.has(key)) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          `cache-config.yml: namespace "${ns}": unknown key "${key}" will be ignored` +
+            ` — known keys: ${[...KNOWN_NAMESPACE_KEYS].join(', ')}`,
+        );
       }
     }
 
