@@ -203,41 +203,65 @@ export function ConfigPage() {
     }));
   }
 
-  function syncTextAreas() {
-    if (!namespace) return true;
-    try {
-      const parsedRules = JSON.parse(rulesText) as NamespaceView['rules'];
-      if (!Array.isArray(parsedRules)) {
-        throw new Error('Rules JSON must be an array');
-      }
+  function buildSyncedConfigSnapshot(current: AdminConfigView): AdminConfigView {
+    if (!selectedNamespace || !current.namespaces[selectedNamespace]) {
+      return current;
+    }
 
-      patchNamespace(current => ({
-        ...current,
-        allow: toLines(allowText),
-        deny: toLines(denyText),
-        rules: parsedRules.map(rule => ({
-          pattern: rule.pattern,
-          cache: toCacheView(rule.cache),
-        })),
-      }));
-      return true;
+    const parsedRules = JSON.parse(rulesText) as NamespaceView['rules'];
+    if (!Array.isArray(parsedRules)) {
+      throw new Error('Rules JSON must be an array');
+    }
+
+    return {
+      ...current,
+      namespaces: {
+        ...current.namespaces,
+        [selectedNamespace]: {
+          ...current.namespaces[selectedNamespace],
+          allow: toLines(allowText),
+          deny: toLines(denyText),
+          rules: parsedRules.map(rule => ({
+            pattern: rule.pattern,
+            cache: toCacheView(rule.cache),
+          })),
+        },
+      },
+    };
+  }
+
+  function syncTextAreas() {
+    if (!config) return null;
+    try {
+      const nextConfig = buildSyncedConfigSnapshot(config);
+      setConfig(nextConfig);
+      return nextConfig;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Rules JSON is invalid');
-      return false;
+      return null;
     }
   }
 
-  const currentPayload = React.useMemo(() => (config ? JSON.stringify(buildPayload(config)) : ''), [config]);
+  const currentPayload = React.useMemo(() => {
+    if (!config) return '';
+    try {
+      return JSON.stringify(buildPayload(buildSyncedConfigSnapshot(config)));
+    } catch {
+      return JSON.stringify(buildPayload(config));
+    }
+  }, [allowText, config, denyText, rulesText, selectedNamespace]);
   const hasUnsavedChanges = !!config && currentPayload !== lastSavedSnapshot;
 
   async function runValidate() {
-    if (!config || !syncTextAreas()) return;
+    if (!config) return;
+    const syncedConfig = syncTextAreas();
+    if (!syncedConfig) return;
     setBusy('validate');
     setMessage(null);
     setError(null);
     try {
       const result = await apiPost<ValidationResult>('/__osham/admin/config/validate', {
-        config: buildPayload(config),
+        config: buildPayload(syncedConfig),
       });
       setValidation(result);
       setMessage(result.valid ? 'Validation passed.' : 'Validation failed. Review the issues below.');
@@ -249,7 +273,9 @@ export function ConfigPage() {
   }
 
   async function runSave() {
-    if (!config || !syncTextAreas()) return;
+    if (!config) return;
+    const syncedConfig = syncTextAreas();
+    if (!syncedConfig) return;
     setBusy('save');
     setMessage(null);
     setError(null);
@@ -257,8 +283,8 @@ export function ConfigPage() {
       const data = await apiPut<{ saved: boolean; revision: string; warnings: { message: string }[] }>(
         '/__osham/admin/config',
         {
-          config: buildPayload(config),
-          expectedRevision: config.meta.revision,
+          config: buildPayload(syncedConfig),
+          expectedRevision: syncedConfig.meta.revision,
         },
       );
       setMessage(`Saved config revision ${data.revision}.`);
