@@ -744,3 +744,248 @@ describe('Specifications', function () {
     assert(res.text.includes('dummyRest'), 'metrics should include namespace labels');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Admin API — auth
+// ---------------------------------------------------------------------------
+describe('Admin API – Auth', function () {
+  this.timeout(5000);
+
+  let prevSecret;
+  let prevInsecure;
+
+  before(function () {
+    prevSecret = process.env.OSHAM_ADMIN_SECRET;
+    prevInsecure = process.env.OSHAM_ADMIN_ALLOW_INSECURE_LOCAL;
+    delete process.env.OSHAM_ADMIN_SECRET;
+    delete process.env.OSHAM_ADMIN_ALLOW_INSECURE_LOCAL;
+  });
+
+  after(function () {
+    if (prevSecret === undefined) {
+      delete process.env.OSHAM_ADMIN_SECRET;
+    } else {
+      process.env.OSHAM_ADMIN_SECRET = prevSecret;
+    }
+    if (prevInsecure === undefined) {
+      delete process.env.OSHAM_ADMIN_ALLOW_INSECURE_LOCAL;
+    } else {
+      process.env.OSHAM_ADMIN_ALLOW_INSECURE_LOCAL = prevInsecure;
+    }
+  });
+
+  it('Should return 401 when no OSHAM_ADMIN_SECRET and OSHAM_ADMIN_ALLOW_INSECURE_LOCAL is not set', async function () {
+    const res = await client.get('/__osham/admin/config');
+    assert.strictEqual(res.status, 401);
+    const body = JSON.parse(res.text);
+    assert.strictEqual(body.ok, false);
+    assert.strictEqual(body.error.code, 'UNAUTHORIZED');
+  });
+
+  it('Should return 401 when OSHAM_ADMIN_SECRET is set but header is missing', async function () {
+    process.env.OSHAM_ADMIN_SECRET = 'test-admin-secret';
+    const res = await client.get('/__osham/admin/config');
+    assert.strictEqual(res.status, 401);
+    const body = JSON.parse(res.text);
+    assert.strictEqual(body.ok, false);
+    assert.strictEqual(body.error.code, 'UNAUTHORIZED');
+  });
+
+  it('Should return 401 when OSHAM_ADMIN_SECRET is set but header value is wrong', async function () {
+    process.env.OSHAM_ADMIN_SECRET = 'test-admin-secret';
+    const res = await client.get('/__osham/admin/config').set('x-osham-admin-secret', 'wrong-value');
+    assert.strictEqual(res.status, 401);
+    const body = JSON.parse(res.text);
+    assert.strictEqual(body.ok, false);
+    assert.strictEqual(body.error.code, 'UNAUTHORIZED');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Admin API — config endpoints (authorized)
+// ---------------------------------------------------------------------------
+describe('Admin API – Config Endpoints', function () {
+  this.timeout(5000);
+
+  const ADMIN_SECRET = 'test-admin-secret';
+
+  let prevSecret;
+  let prevInsecure;
+
+  before(function () {
+    prevSecret = process.env.OSHAM_ADMIN_SECRET;
+    prevInsecure = process.env.OSHAM_ADMIN_ALLOW_INSECURE_LOCAL;
+    process.env.OSHAM_ADMIN_SECRET = ADMIN_SECRET;
+    delete process.env.OSHAM_ADMIN_ALLOW_INSECURE_LOCAL;
+  });
+
+  after(function () {
+    if (prevSecret === undefined) {
+      delete process.env.OSHAM_ADMIN_SECRET;
+    } else {
+      process.env.OSHAM_ADMIN_SECRET = prevSecret;
+    }
+    if (prevInsecure === undefined) {
+      delete process.env.OSHAM_ADMIN_ALLOW_INSECURE_LOCAL;
+    } else {
+      process.env.OSHAM_ADMIN_ALLOW_INSECURE_LOCAL = prevInsecure;
+    }
+  });
+
+  function authed() {
+    return { set: (req) => req.set('x-osham-admin-secret', ADMIN_SECRET) };
+  }
+
+  it('GET /__osham/admin/config should return structured config', async function () {
+    const res = await client.get('/__osham/admin/config').set('x-osham-admin-secret', ADMIN_SECRET);
+    assert.strictEqual(res.status, 200);
+    const body = JSON.parse(res.text);
+    assert.strictEqual(body.ok, true);
+    assert.ok(body.data, 'data should be present');
+    assert.ok(body.data.globalConfig, 'globalConfig should be present');
+    assert.ok(body.data.namespaces, 'namespaces should be present');
+    assert.ok(body.data.meta, 'meta should be present');
+    assert.ok(body.data.meta.revision, 'revision should be present');
+    assert.ok(body.data.meta.lastLoadedAt, 'lastLoadedAt should be present');
+    assert.ok(body.data.meta.source, 'source should be present');
+    assert.strictEqual(typeof body.data.globalConfig.version, 'string');
+  });
+
+  it('GET /__osham/admin/config should include secure block in globalConfig', async function () {
+    const res = await client.get('/__osham/admin/config').set('x-osham-admin-secret', ADMIN_SECRET);
+    const body = JSON.parse(res.text);
+    assert.ok(body.data.globalConfig.secure, 'secure block should be present');
+    assert.strictEqual(typeof body.data.globalConfig.secure.enabled, 'boolean');
+  });
+
+  it('POST /__osham/admin/config/validate with valid config should return valid:true', async function () {
+    const payload = {
+      config: {
+        globalConfig: { version: '1', health: true },
+        namespaces: {
+          api: { expose: '/api/*', target: 'http://localhost:9999' },
+        },
+      },
+    };
+    const res = await client
+      .post('/__osham/admin/config/validate')
+      .set('x-osham-admin-secret', ADMIN_SECRET)
+      .set('content-type', 'application/json')
+      .send(JSON.stringify(payload));
+    assert.strictEqual(res.status, 200);
+    const body = JSON.parse(res.text);
+    assert.strictEqual(body.ok, true);
+    assert.strictEqual(body.data.valid, true);
+    assert.ok(Array.isArray(body.data.errors), 'errors should be an array');
+    assert.ok(Array.isArray(body.data.warnings), 'warnings should be an array');
+    assert.strictEqual(body.data.errors.length, 0);
+  });
+
+  it('POST /__osham/admin/config/validate with missing version should return valid:false', async function () {
+    const payload = {
+      config: {
+        globalConfig: {},
+        namespaces: {
+          api: { expose: '/api/*', target: 'http://localhost:9999' },
+        },
+      },
+    };
+    const res = await client
+      .post('/__osham/admin/config/validate')
+      .set('x-osham-admin-secret', ADMIN_SECRET)
+      .set('content-type', 'application/json')
+      .send(JSON.stringify(payload));
+    assert.strictEqual(res.status, 200);
+    const body = JSON.parse(res.text);
+    assert.strictEqual(body.ok, true);
+    assert.strictEqual(body.data.valid, false);
+    assert.ok(body.data.errors.length > 0, 'should have at least one error');
+  });
+
+  it('POST /__osham/admin/config/validate with missing namespace expose should return valid:false', async function () {
+    const payload = {
+      config: {
+        globalConfig: { version: '1' },
+        namespaces: {
+          api: { target: 'http://localhost:9999' },
+        },
+      },
+    };
+    const res = await client
+      .post('/__osham/admin/config/validate')
+      .set('x-osham-admin-secret', ADMIN_SECRET)
+      .set('content-type', 'application/json')
+      .send(JSON.stringify(payload));
+    assert.strictEqual(res.status, 200);
+    const body = JSON.parse(res.text);
+    assert.strictEqual(body.data.valid, false);
+    assert.ok(body.data.errors[0].message.includes('expose'), 'error should mention expose field');
+  });
+
+  it('PUT /__osham/admin/config with valid config should save and return revision', async function () {
+    const payload = {
+      config: {
+        globalConfig: { version: '1', health: true, metrics: true, purge: true },
+        namespaces: {
+          dummyRest: {
+            expose: '/api/v1/*',
+            target: `http://localhost:1`, // placeholder target
+            cache: { expires: '10s' },
+          },
+        },
+      },
+    };
+    const res = await client
+      .put('/__osham/admin/config')
+      .set('x-osham-admin-secret', ADMIN_SECRET)
+      .set('content-type', 'application/json')
+      .send(JSON.stringify(payload));
+    assert.strictEqual(res.status, 200);
+    const body = JSON.parse(res.text);
+    assert.strictEqual(body.ok, true);
+    assert.strictEqual(body.data.saved, true);
+    assert.ok(body.data.revision, 'revision should be returned');
+    assert.ok(Array.isArray(body.data.warnings));
+  });
+
+  it('PUT /__osham/admin/config with invalid config should return 400 with validation errors', async function () {
+    const payload = {
+      config: {
+        globalConfig: {},
+        namespaces: {},
+      },
+    };
+    const res = await client
+      .put('/__osham/admin/config')
+      .set('x-osham-admin-secret', ADMIN_SECRET)
+      .set('content-type', 'application/json')
+      .send(JSON.stringify(payload));
+    assert.strictEqual(res.status, 400);
+    const body = JSON.parse(res.text);
+    assert.strictEqual(body.ok, false);
+    assert.strictEqual(body.error.code, 'VALIDATION_FAILED');
+    assert.ok(body.details.errors.length > 0, 'should have validation errors');
+  });
+
+  it('POST /__osham/admin/config/reload should return applied:true with summary', async function () {
+    const res = await client
+      .post('/__osham/admin/config/reload')
+      .set('x-osham-admin-secret', ADMIN_SECRET);
+    assert.strictEqual(res.status, 200);
+    const body = JSON.parse(res.text);
+    assert.strictEqual(body.ok, true);
+    assert.strictEqual(body.data.applied, true);
+    assert.ok(body.data.revision, 'revision should be returned');
+    assert.ok(body.data.summary, 'summary should be present');
+    assert.strictEqual(typeof body.data.summary.namespaceCount, 'number');
+    assert.ok(body.data.summary.features, 'features should be in summary');
+  });
+
+  it('Unknown admin route should return 404 with ok:false', async function () {
+    const res = await client.get('/__osham/admin/unknown-route').set('x-osham-admin-secret', ADMIN_SECRET);
+    assert.strictEqual(res.status, 404);
+    const body = JSON.parse(res.text);
+    assert.strictEqual(body.ok, false);
+    assert.strictEqual(body.error.code, 'NOT_FOUND');
+  });
+});

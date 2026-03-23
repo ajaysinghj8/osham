@@ -204,6 +204,57 @@ export function validateConfig(config: unknown): IFullConfig {
   };
 }
 
+export interface ValidationIssue {
+  field: string;
+  message: string;
+  severity: 'error' | 'warning';
+  code: string;
+}
+
+export interface ValidationResult {
+  valid: boolean;
+  errors: ValidationIssue[];
+  warnings: ValidationIssue[];
+}
+
+/**
+ * Validates a config object and returns structured errors/warnings instead of throwing.
+ * Captures console.warn calls from validateConfig to collect unknown-key warnings.
+ */
+export function validateConfigCollecting(config: unknown): ValidationResult {
+  const errors: ValidationIssue[] = [];
+  const warnings: ValidationIssue[] = [];
+
+  // Temporarily intercept console.warn to capture unknown-key warnings from validateConfig
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const origWarn = (console as any).warn;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (console as any).warn = (...args: unknown[]) => {
+    warnings.push({
+      field: 'config',
+      message: String(args[0] || ''),
+      severity: 'warning',
+      code: 'UNKNOWN_KEY',
+    });
+  };
+
+  try {
+    validateConfig(config);
+    return { valid: true, errors, warnings };
+  } catch (err) {
+    errors.push({
+      field: 'config',
+      message: err instanceof Error ? err.message : String(err),
+      severity: 'error',
+      code: 'VALIDATION_FAILED',
+    });
+    return { valid: false, errors, warnings };
+  } finally {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (console as any).warn = origWarn;
+  }
+}
+
 export function getCacheConfig(): IFullConfig {
   const configFilePath = join(process.cwd(), 'cache-config.yml');
   let raw: string;
