@@ -515,6 +515,55 @@ describe('Config Validation', function () {
     );
   });
 
+  it('Should warn on unknown top-level scalar keys (likely typos of global flags)', function () {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { validateConfig } = require('../lib/config.reader');
+    const warnings = [];
+    const originalWarn = console.warn;
+    console.warn = (...args) => warnings.push(args.join(' '));
+    try {
+      validateConfig({
+        version: '1',
+        purges: true, // typo of 'purge'
+        healthCheck: false, // typo of 'health'
+        myNs: { expose: '/api/*', target: 'http://localhost:3000' },
+      });
+    } finally {
+      console.warn = originalWarn;
+    }
+    assert.ok(
+      warnings.some(w => w.includes('unknown top-level key') && w.includes('"purges"')),
+      'should warn about unknown top-level scalar key "purges"',
+    );
+    assert.ok(
+      warnings.some(w => w.includes('unknown top-level key') && w.includes('"healthCheck"')),
+      'should warn about unknown top-level scalar key "healthCheck"',
+    );
+  });
+
+  it('Should not warn on known top-level keys or namespace objects', function () {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { validateConfig } = require('../lib/config.reader');
+    const warnings = [];
+    const originalWarn = console.warn;
+    console.warn = (...args) => warnings.push(args.join(' '));
+    try {
+      validateConfig({
+        version: '1',
+        xResponseTime: true,
+        health: true,
+        purge: true,
+        metrics: true,
+        changeOrigin: false,
+        myNs: { expose: '/api/*', target: 'http://localhost:3000' },
+      });
+    } finally {
+      console.warn = originalWarn;
+    }
+    const topLevelWarnings = warnings.filter(w => w.includes('unknown top-level key'));
+    assert.strictEqual(topLevelWarnings.length, 0, 'should have no top-level unknown key warnings for known keys');
+  });
+
   it('Should not warn on known namespace keys', function () {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { validateConfig } = require('../lib/config.reader');

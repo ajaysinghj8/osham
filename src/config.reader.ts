@@ -15,6 +15,8 @@ function supplant(o = {}) {
 
 const RESERVED_KEYS = new Set(['version', 'xResponseTime', 'health', 'purge', 'metrics', 'changeOrigin']);
 
+const KNOWN_TOP_LEVEL_KEYS = new Set(['version', 'xResponseTime', 'health', 'purge', 'metrics', 'changeOrigin']);
+
 const KNOWN_NAMESPACE_KEYS = new Set([
   'expose',
   'target',
@@ -88,7 +90,28 @@ export function validateConfig(config: unknown): IFullConfig {
     }
   }
 
-  const namespaceKeys = Object.keys(cfg).filter(k => !RESERVED_KEYS.has(k));
+  // Warn about unknown top-level scalar keys — these are almost always typos of reserved flags
+  // (e.g. `purges: true` instead of `purge: true`). Object-valued keys are namespace candidates
+  // and will be validated below.
+  for (const key of Object.keys(cfg)) {
+    if (
+      !KNOWN_TOP_LEVEL_KEYS.has(key) &&
+      (typeof cfg[key] !== 'object' || cfg[key] === null || Array.isArray(cfg[key]))
+    ) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `cache-config.yml: unknown top-level key "${key}" with a non-object value will be ignored` +
+          ` — known top-level keys: ${[...KNOWN_TOP_LEVEL_KEYS].join(', ')}` +
+          ` (if this is a namespace, its value must be an object with "expose" and "target" fields)`,
+      );
+    }
+  }
+
+  // Only object-valued non-reserved keys are treated as namespace candidates.
+  // Scalar non-reserved keys have already been warned about above and are skipped here.
+  const namespaceKeys = Object.keys(cfg).filter(
+    k => !RESERVED_KEYS.has(k) && typeof cfg[k] === 'object' && cfg[k] !== null && !Array.isArray(cfg[k]),
+  );
   if (namespaceKeys.length === 0) {
     throw new Error('cache-config.yml: at least one proxy namespace must be defined with "expose" and "target" fields');
   }
