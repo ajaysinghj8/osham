@@ -30,6 +30,7 @@ export class Metrics {
   private static pooledCounts = new Map<string, number>();
   private static cacheSizes = new Map<string, number>();
   private static durations = new Map<string, number[]>();
+  private static knownNamespaces = new Set<string>();
 
   // Cache hit counter (by namespace)
   static cacheHits = new prometheus.Counter({
@@ -67,29 +68,62 @@ export class Metrics {
     labelNames: ['namespace'],
   });
 
+  // Namespace presence gauge so Prometheus output always advertises configured namespaces,
+  // even before a cache hit/miss has happened.
+  static namespaceInfo = new prometheus.Gauge({
+    name: 'osham_namespace_info',
+    help: 'Configured Osham namespaces',
+    labelNames: ['namespace'],
+  });
+
+  static ensureNamespace(namespace: string): void {
+    if (this.knownNamespaces.has(namespace)) return;
+
+    this.knownNamespaces.add(namespace);
+    this.requestCounts.set(namespace, this.requestCounts.get(namespace) || 0);
+    this.hitCounts.set(namespace, this.hitCounts.get(namespace) || 0);
+    this.missCounts.set(namespace, this.missCounts.get(namespace) || 0);
+    this.pooledCounts.set(namespace, this.pooledCounts.get(namespace) || 0);
+    this.cacheSizes.set(namespace, this.cacheSizes.get(namespace) || 0);
+
+    this.cacheHits.labels(namespace).inc(0);
+    this.cacheMisses.labels(namespace).inc(0);
+    this.pooledRequests.labels(namespace).set(this.pooledCounts.get(namespace) || 0);
+    this.cacheSizeBytes.labels(namespace).set(this.cacheSizes.get(namespace) || 0);
+    this.namespaceInfo.labels(namespace).set(1);
+  }
+
+  static ensureNamespaces(namespaces: string[]): void {
+    namespaces.forEach(namespace => this.ensureNamespace(namespace));
+  }
+
   // Get all metrics in Prometheus text format
   static async getMetrics(): Promise<string> {
     return prometheus.register.metrics();
   }
 
   static recordRequest(namespace: string): void {
+    this.ensureNamespace(namespace);
     this.requestCounts.set(namespace, (this.requestCounts.get(namespace) || 0) + 1);
   }
 
   // Record cache hit
   static recordCacheHit(namespace: string): void {
+    this.ensureNamespace(namespace);
     this.hitCounts.set(namespace, (this.hitCounts.get(namespace) || 0) + 1);
     this.cacheHits.labels(namespace).inc();
   }
 
   // Record cache miss
   static recordCacheMiss(namespace: string): void {
+    this.ensureNamespace(namespace);
     this.missCounts.set(namespace, (this.missCounts.get(namespace) || 0) + 1);
     this.cacheMisses.labels(namespace).inc();
   }
 
   // Record request duration
   static recordRequestDuration(namespace: string, method: string, status: number, durationSeconds: number): void {
+    this.ensureNamespace(namespace);
     const samples = this.durations.get(namespace) || [];
     samples.push(durationSeconds);
     this.durations.set(namespace, samples.slice(-500));
@@ -98,17 +132,20 @@ export class Metrics {
 
   // Set pooled requests count
   static setPooledRequests(namespace: string, count: number): void {
+    this.ensureNamespace(namespace);
     this.pooledCounts.set(namespace, count);
     this.pooledRequests.labels(namespace).set(count);
   }
 
   // Set cache size
   static setCacheSize(namespace: string, sizeBytes: number): void {
+    this.ensureNamespace(namespace);
     this.cacheSizes.set(namespace, sizeBytes);
     this.cacheSizeBytes.labels(namespace).set(sizeBytes);
   }
 
   static getSummary(namespaces: string[]): MetricsSummary {
+    this.ensureNamespaces(namespaces);
     const rows = this.getNamespaceSummaries(namespaces);
     const cacheHits = rows.reduce((sum, row) => sum + row.cacheHits, 0);
     const cacheMisses = rows.reduce((sum, row) => sum + row.cacheMisses, 0);
@@ -127,6 +164,7 @@ export class Metrics {
   }
 
   static getNamespaceSummaries(namespaces: string[]): NamespaceSummary[] {
+    this.ensureNamespaces(namespaces);
     return namespaces.sort().map(namespace => {
       const requests = this.requestCounts.get(namespace) || 0;
       const cacheHits = this.hitCounts.get(namespace) || 0;

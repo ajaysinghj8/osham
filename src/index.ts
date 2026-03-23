@@ -17,6 +17,7 @@ import { ComposedMiddleware } from 'koa-compose';
 import { getAdminState, setAdminState, computeRevision } from './admin.state';
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { Metrics } from './services/metrics.service';
 // import { timeoutMiddlewareProvider } from './middlewares/timeoutMiddleware';
 
 const logger = Debug('acp:index');
@@ -56,6 +57,8 @@ function buildRuntimeMiddlewares(config = getAdminState()?.config): Array<Compos
   );
 }
 
+Metrics.ensureNamespaces(Object.keys(namespaces));
+
 // Startup summary — always visible so operators know exactly what loaded.
 const enabledFeatures =
   (['xResponseTime', 'health', 'purge', 'metrics', 'changeOrigin'] as const).filter(f => globalConfig[f]).join(', ') ||
@@ -92,6 +95,7 @@ const DynamicRuntime: ComposedMiddleware<IContext> = async (ctx, next) => {
   const state = getAdminState();
   if (state && state.meta.revision !== runtimeRevision) {
     runtimeRevision = state.meta.revision;
+    Metrics.ensureNamespaces(Object.keys(state.config.namespaces));
     runtimeChain = compose(buildRuntimeMiddlewares(state.config));
   }
 
