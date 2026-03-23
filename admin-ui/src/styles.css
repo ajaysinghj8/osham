@@ -60,6 +60,46 @@ body {
   padding: 28px;
 }
 
+.toolbar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.input,
+.button,
+.textarea {
+  border: 1px solid #31415e;
+  background: #0f172a;
+  color: #e7ecf3;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.input {
+  min-width: 280px;
+}
+
+.button {
+  cursor: pointer;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 16px;
+}
+
+.table th,
+.table td {
+  border-bottom: 1px solid #22304a;
+  padding: 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
 .page {
   max-width: 1080px;
 }

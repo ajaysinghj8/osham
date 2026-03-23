@@ -8,12 +8,14 @@ import { PurgePage } from './screens/PurgePage';
 import { AuditPage } from './screens/AuditPage';
 import { NotFoundPage } from './screens/NotFoundPage';
 import { Sidebar } from './ui/Sidebar';
+import { AdminSecretBar } from './ui/AdminSecretBar';
 
 function Layout() {
   return (
     <div className="app-shell">
       <Sidebar />
       <main className="content-shell">
+        <AdminSecretBar />
         <Outlet />
       </main>
     </div>
