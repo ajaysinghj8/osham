@@ -319,7 +319,7 @@ export async function AdminConfig(ctx: IContext, next: Koa.Next): Promise<void> 
               xResponseTime: newConfig.globalConfig.xResponseTime,
             },
           },
-          note: 'Config metadata reloaded. Restart the server to apply routing changes.',
+          note: 'Config reloaded and applied to the running admin/runtime middleware chain.',
         },
       });
     } catch (err) {

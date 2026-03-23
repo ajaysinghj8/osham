@@ -14,7 +14,7 @@ import { CtxProvider } from './ctx.provider';
 import * as compose from 'koa-compose';
 import { IContext } from './types';
 import { ComposedMiddleware } from 'koa-compose';
-import { setAdminState, computeRevision } from './admin.state';
+import { getAdminState, setAdminState, computeRevision } from './admin.state';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 // import { timeoutMiddlewareProvider } from './middlewares/timeoutMiddleware';
@@ -23,6 +23,22 @@ const logger = Debug('acp:index');
 
 const middlewares: Array<ComposedMiddleware<IContext>> = [];
 const { globalConfig, namespaces } = getCacheConfig();
+
+function buildRuntimeMiddlewares(config = getAdminState()?.config): Array<ComposedMiddleware<IContext>> {
+  if (!config) return [];
+
+  const runtimeMiddlewares: Array<ComposedMiddleware<IContext>> = [];
+  if (config.globalConfig.xResponseTime) runtimeMiddlewares.push(RouteTimeReqRes);
+  if (config.globalConfig.health) runtimeMiddlewares.push(HealthCheck);
+  if (config.globalConfig.purge) runtimeMiddlewares.push(PurgeCache);
+  if (config.globalConfig.metrics) runtimeMiddlewares.push(MetricsEndpoint);
+
+  for (const [key, options] of Object.entries(config.namespaces)) {
+    runtimeMiddlewares.push(createNameSpaceHandler(key, options));
+  }
+
+  return runtimeMiddlewares;
+}
 
 // Initialise admin state so GET /__osham/admin/config has data immediately.
 {
@@ -69,16 +85,22 @@ if (process.env.TIMEOUT) {
   // middlewares.push(timeoutMiddlewareProvider(+process.env.TIMEOUT));
 }
 
+let runtimeRevision = '';
+let runtimeChain = compose(buildRuntimeMiddlewares({ globalConfig, namespaces }));
+
+const DynamicRuntime: ComposedMiddleware<IContext> = async (ctx, next) => {
+  const state = getAdminState();
+  if (state && state.meta.revision !== runtimeRevision) {
+    runtimeRevision = state.meta.revision;
+    runtimeChain = compose(buildRuntimeMiddlewares(state.config));
+  }
+
+  return runtimeChain(ctx, next);
+};
+
 // Admin API is always mounted; auth is controlled via OSHAM_ADMIN_SECRET env var.
 middlewares.push(AdminConfig);
-if (globalConfig.xResponseTime) middlewares.push(RouteTimeReqRes);
-if (globalConfig.health) middlewares.push(HealthCheck);
-if (globalConfig.purge) middlewares.push(PurgeCache);
-if (globalConfig.metrics) middlewares.push(MetricsEndpoint);
-
-for (const [key, options] of Object.entries(namespaces)) {
-  middlewares.push(createNameSpaceHandler(key, options));
-}
+middlewares.push(DynamicRuntime);
 
 Server.on('request', async (req: IncomingMessage, res: ServerResponse) => {
   const ctx = CtxProvider(req, res);

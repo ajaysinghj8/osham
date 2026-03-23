@@ -944,7 +944,7 @@ describe('Admin API – Config Endpoints', function () {
         namespaces: {
           dummyRest: {
             expose: '/api/v1/*',
-            target: `http://localhost:1`, // placeholder target
+            target: `http://localhost:${stubServer.address().port}`,
             cache: { expires: '10s' },
           },
         },
@@ -992,6 +992,57 @@ describe('Admin API – Config Endpoints', function () {
     assert.ok(body.data.summary, 'summary should be present');
     assert.strictEqual(typeof body.data.summary.namespaceCount, 'number');
     assert.ok(body.data.summary.features, 'features should be in summary');
+    assert.match(body.data.note, /applied to the running/i);
+  });
+
+  it('POST /__osham/admin/config/reload should apply newly added namespaces without a restart', async function () {
+    const currentConfigRes = await client.get('/__osham/admin/config').set('x-osham-admin-secret', ADMIN_SECRET);
+    assert.strictEqual(currentConfigRes.status, 200);
+    const currentConfigBody = JSON.parse(currentConfigRes.text);
+    const currentConfig = currentConfigBody.data;
+
+    const nextConfig = {
+      globalConfig: {
+        version: currentConfig.globalConfig.version,
+        health: currentConfig.globalConfig.health,
+        metrics: currentConfig.globalConfig.metrics,
+        purge: currentConfig.globalConfig.purge,
+        xResponseTime: currentConfig.globalConfig.xResponseTime,
+        changeOrigin: currentConfig.globalConfig.changeOrigin,
+      },
+      namespaces: {
+        ...currentConfig.namespaces,
+        liveReloaded: {
+          expose: '/live/*',
+          target: currentConfig.namespaces.dummyRest.target,
+          changeOrigin: true,
+          cache: {
+            expires: '5s',
+          },
+        },
+      },
+    };
+
+    const saveRes = await client
+      .put('/__osham/admin/config')
+      .set('x-osham-admin-secret', ADMIN_SECRET)
+      .set('content-type', 'application/json')
+      .send(
+        JSON.stringify({
+          config: nextConfig,
+          expectedRevision: currentConfig.meta.revision,
+        }),
+      );
+    assert.strictEqual(saveRes.status, 200);
+
+    await client.get('/live/employees').expect(404);
+
+    const reloadRes = await client.post('/__osham/admin/config/reload').set('x-osham-admin-secret', ADMIN_SECRET);
+    assert.strictEqual(reloadRes.status, 200);
+
+    const liveRes = await client.get('/live/employees').expect(200);
+    assert.strictEqual(liveRes.body.status, 'success');
+    assert.strictEqual(liveRes.headers['x-osham-hit'], 'false');
   });
 
   it('GET /__osham/admin/health should return operational health summary', async function () {
