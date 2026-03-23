@@ -281,6 +281,36 @@ export async function AdminConfig(ctx: IContext, next: Koa.Next): Promise<void> 
   }
 
   if (ctx.method === 'POST' && subPath === '/config/reload') {
+    let body: unknown;
+    try {
+      body = await readBody(ctx);
+    } catch {
+      jsonResponse(ctx, 400, { ok: false, error: { code: 'APPLY_FAILED', message: 'Invalid JSON body' } });
+      return;
+    }
+
+    const b = body as { expectedRevision?: string };
+    const state = getAdminState();
+    if (b.expectedRevision !== undefined && state && b.expectedRevision !== state.meta.revision) {
+      appendAdminAuditEvent({
+        time: new Date().toISOString(),
+        action: 'config.reload',
+        actor: 'admin',
+        result: 'failure',
+        details: {
+          message: 'expectedRevision does not match current revision',
+          expectedRevision: b.expectedRevision,
+          currentRevision: state.meta.revision,
+        },
+      });
+
+      jsonResponse(ctx, 409, {
+        ok: false,
+        error: { code: 'REVISION_CONFLICT', message: 'expectedRevision does not match current revision' },
+      });
+      return;
+    }
+
     try {
       const configPath = join(process.cwd(), 'cache-config.yml');
       const rawContent = readFileSync(configPath, 'utf-8');

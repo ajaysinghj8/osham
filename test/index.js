@@ -982,6 +982,33 @@ describe('Admin API – Config Endpoints', function () {
     assert.ok(body.details.errors.length > 0, 'should have validation errors');
   });
 
+  it('PUT /__osham/admin/config should reject stale expectedRevision values', async function () {
+    const payload = {
+      config: {
+        globalConfig: { version: '1', health: true, metrics: true, purge: true },
+        namespaces: {
+          dummyRest: {
+            expose: '/api/v1/*',
+            target: `http://localhost:${stubServer.address().port}`,
+            cache: { expires: '10s' },
+          },
+        },
+      },
+      expectedRevision: 'stale-revision',
+    };
+
+    const res = await client
+      .put('/__osham/admin/config')
+      .set('x-osham-admin-secret', ADMIN_SECRET)
+      .set('content-type', 'application/json')
+      .send(JSON.stringify(payload));
+
+    assert.strictEqual(res.status, 409);
+    const body = JSON.parse(res.text);
+    assert.strictEqual(body.ok, false);
+    assert.strictEqual(body.error.code, 'REVISION_CONFLICT');
+  });
+
   it('POST /__osham/admin/config/reload should return applied:true with summary', async function () {
     const res = await client.post('/__osham/admin/config/reload').set('x-osham-admin-secret', ADMIN_SECRET);
     assert.strictEqual(res.status, 200);
@@ -993,6 +1020,19 @@ describe('Admin API – Config Endpoints', function () {
     assert.strictEqual(typeof body.data.summary.namespaceCount, 'number');
     assert.ok(body.data.summary.features, 'features should be in summary');
     assert.match(body.data.note, /applied to the running/i);
+  });
+
+  it('POST /__osham/admin/config/reload should reject stale expectedRevision values', async function () {
+    const res = await client
+      .post('/__osham/admin/config/reload')
+      .set('x-osham-admin-secret', ADMIN_SECRET)
+      .set('content-type', 'application/json')
+      .send(JSON.stringify({ expectedRevision: 'stale-revision' }));
+
+    assert.strictEqual(res.status, 409);
+    const body = JSON.parse(res.text);
+    assert.strictEqual(body.ok, false);
+    assert.strictEqual(body.error.code, 'REVISION_CONFLICT');
   });
 
   it('POST /__osham/admin/config/reload should apply newly added namespaces without a restart', async function () {

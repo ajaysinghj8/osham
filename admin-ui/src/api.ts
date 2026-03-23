@@ -1,7 +1,25 @@
+export class ApiError extends Error {
+  status: number;
+  code?: string;
+  details?: unknown;
+
+  constructor(message: string, options: { status: number; code?: string; details?: unknown }) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = options.status;
+    this.code = options.code;
+    this.details = options.details;
+  }
+}
+
 async function readJsonResponse<T>(res: Response): Promise<T> {
   const body = await res.json();
   if (!res.ok || body.ok === false) {
-    throw new Error(body?.error?.message || `Request failed: ${res.status}`);
+    throw new ApiError(body?.error?.message || `Request failed: ${res.status}`, {
+      status: res.status,
+      code: body?.error?.code,
+      details: body?.details,
+    });
   }
   return body.data as T;
 }

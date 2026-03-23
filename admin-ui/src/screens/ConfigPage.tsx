@@ -1,5 +1,5 @@
 import React from 'react';
-import { apiGet, apiPost, apiPut } from '../api';
+import { ApiError, apiGet, apiPost, apiPut } from '../api';
 import { AdminConfigView, CacheConfigView, NamespaceView, ValidationResult } from '../types';
 import { Page } from '../ui/Page';
 import { Card } from '../ui/Card';
@@ -128,6 +128,27 @@ function buildPayload(config: AdminConfigView) {
   };
 }
 
+function cloneNamespaceView(namespace: NamespaceView): NamespaceView {
+  return {
+    ...namespace,
+    allow: [...namespace.allow],
+    deny: [...namespace.deny],
+    cache: {
+      ...namespace.cache,
+      query: [...namespace.cache.query],
+      headers: [...namespace.cache.headers],
+    },
+    rules: namespace.rules.map(rule => ({
+      pattern: rule.pattern,
+      cache: {
+        ...rule.cache,
+        query: [...rule.cache.query],
+        headers: [...rule.cache.headers],
+      },
+    })),
+  };
+}
+
 export function ConfigPage() {
   const [config, setConfig] = React.useState<AdminConfigView | null>(null);
   const [selectedNamespace, setSelectedNamespace] = React.useState<string>('');
@@ -138,6 +159,7 @@ export function ConfigPage() {
   const [message, setMessage] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState<string | null>(null);
+  const [lastSavedSnapshot, setLastSavedSnapshot] = React.useState<string>('');
 
   const loadConfig = React.useCallback(async () => {
     try {
@@ -147,6 +169,7 @@ export function ConfigPage() {
       setSelectedNamespace(current => (current && data.namespaces[current] ? current : firstNamespace));
       setValidation(null);
       setError(null);
+      setLastSavedSnapshot(JSON.stringify(buildPayload(data)));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load config');
     }
@@ -204,6 +227,9 @@ export function ConfigPage() {
     }
   }
 
+  const currentPayload = React.useMemo(() => (config ? JSON.stringify(buildPayload(config)) : ''), [config]);
+  const hasUnsavedChanges = !!config && currentPayload !== lastSavedSnapshot;
+
   async function runValidate() {
     if (!config || !syncTextAreas()) return;
     setBusy('validate');
@@ -250,22 +276,36 @@ export function ConfigPage() {
         });
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Save failed');
+      if (err instanceof ApiError && err.code === 'REVISION_CONFLICT') {
+        setError('Save blocked: the live config revision changed. Refresh, review the latest config, and re-apply your edits.');
+      } else {
+        setError(err instanceof Error ? err.message : 'Save failed');
+      }
     } finally {
       setBusy(null);
     }
   }
 
   async function runReload() {
+    if (hasUnsavedChanges) {
+      setError('Reload blocked while there are unsaved editor changes. Save or refresh first so you do not lose your draft.');
+      return;
+    }
     setBusy('reload');
     setMessage(null);
     setError(null);
     try {
-      const data = await apiPost<{ applied: boolean; revision: string; note?: string }>('/__osham/admin/config/reload', {});
+      const data = await apiPost<{ applied: boolean; revision: string; note?: string }>('/__osham/admin/config/reload', {
+        expectedRevision: config?.meta.revision,
+      });
       setMessage(data.note || `Reloaded admin state at revision ${data.revision}.`);
       await loadConfig();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Reload failed');
+      if (err instanceof ApiError && err.code === 'REVISION_CONFLICT') {
+        setError('Reload blocked: another change landed first. Refresh to inspect the new revision before applying again.');
+      } else {
+        setError(err instanceof Error ? err.message : 'Reload failed');
+      }
     } finally {
       setBusy(null);
     }
@@ -295,6 +335,37 @@ export function ConfigPage() {
     setSelectedNamespace(name);
   }
 
+  function cloneNamespace() {
+    if (!config || !namespace || !selectedNamespace) return;
+    const name = window.prompt('Clone namespace as', `${selectedNamespace}-copy`);
+    if (!name || config.namespaces[name]) return;
+    patchConfig(current => ({
+      ...current,
+      namespaces: {
+        ...current.namespaces,
+        [name]: cloneNamespaceView(current.namespaces[selectedNamespace]),
+      },
+    }));
+    setSelectedNamespace(name);
+    setMessage(`Cloned namespace ${selectedNamespace} to ${name}.`);
+  }
+
+  function deleteNamespace() {
+    if (!config || !namespace || !selectedNamespace) return;
+    if (!window.confirm(`Delete namespace ${selectedNamespace}? This only updates the draft until you save.`)) return;
+    const names = Object.keys(config.namespaces).filter(name => name !== selectedNamespace);
+    patchConfig(current => {
+      const nextNamespaces = { ...current.namespaces };
+      delete nextNamespaces[selectedNamespace];
+      return {
+        ...current,
+        namespaces: nextNamespaces,
+      };
+    });
+    setSelectedNamespace(names[0] || '');
+    setMessage(`Removed namespace ${selectedNamespace} from the draft. Save to persist the change.`);
+  }
+
   return (
     <Page title="Config" subtitle="Edit global settings and namespace config, then validate/save/reload against the live admin API.">
       <div className="toolbar">
@@ -307,14 +378,21 @@ export function ConfigPage() {
         <button className="button" onClick={runSave} disabled={!config || busy !== null}>
           {busy === 'save' ? 'Saving…' : 'Save'}
         </button>
-        <button className="button" onClick={runReload} disabled={busy !== null}>
+        <button className="button" onClick={runReload} disabled={!config || busy !== null}>
           {busy === 'reload' ? 'Reloading…' : 'Reload Admin State'}
         </button>
         <button className="button" onClick={addNamespace} disabled={!config || busy !== null}>
           Add Namespace
         </button>
+        <button className="button" onClick={cloneNamespace} disabled={!namespace || busy !== null}>
+          Clone Namespace
+        </button>
+        <button className="button" onClick={deleteNamespace} disabled={!namespace || busy !== null}>
+          Delete Namespace
+        </button>
       </div>
 
+      {hasUnsavedChanges ? <div className="code-block">You have unsaved draft changes in the config editor.</div> : null}
       {message ? <div className="code-block">{message}</div> : null}
       {error ? <div className="code-block">{error}</div> : null}
 
@@ -326,6 +404,7 @@ export function ConfigPage() {
               <p>Source: {config.meta.source}</p>
               <p>Last loaded: {config.meta.lastLoadedAt}</p>
               <p>Last applied: {config.meta.lastAppliedAt || 'Not yet applied'}</p>
+              <p>Draft state: {hasUnsavedChanges ? 'dirty' : 'clean'}</p>
             </Card>
             <Card title="Global Settings">
               <div className="form-grid compact-grid">
