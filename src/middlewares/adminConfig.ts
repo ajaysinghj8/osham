@@ -7,8 +7,19 @@ import { join } from 'path';
 import { dump } from 'js-yaml';
 import { Cache } from '../services/cache.service';
 import { Metrics } from '../services/metrics.service';
+import { appendAdminAuditEvent, getAdminAuditEvents } from '../admin.audit';
 
 const ADMIN_BASE = '/__osham/admin';
+
+function broadPatternWarning(pattern: string): string | undefined {
+  if (pattern === '*' || pattern === '**' || !pattern.startsWith('O:')) {
+    return (
+      'Pattern may match keys across all namespaces. ' +
+      'Use the "O:<namespace>:<path>" prefix (e.g. "O:myNs:/api/v1/users*") for a safer, scoped purge.'
+    );
+  }
+  return undefined;
+}
 
 /**
  * Checks the x-osham-admin-secret header against OSHAM_ADMIN_SECRET env var.
@@ -237,11 +248,27 @@ export async function AdminConfig(ctx: IContext, next: Koa.Next): Promise<void> 
       renameSync(tempPath, configPath);
       const revision = computeRevision(yamlContent);
 
+      appendAdminAuditEvent({
+        time: new Date().toISOString(),
+        action: 'config.save',
+        actor: 'admin',
+        result: 'success',
+        details: { revision, warnings: validation.warnings.length },
+      });
+
       jsonResponse(ctx, 200, {
         ok: true,
         data: { saved: true, revision, warnings: validation.warnings },
       });
     } catch (err) {
+      appendAdminAuditEvent({
+        time: new Date().toISOString(),
+        action: 'config.save',
+        actor: 'admin',
+        result: 'failure',
+        details: { message: err instanceof Error ? err.message : 'Failed to save config' },
+      });
+
       jsonResponse(ctx, 500, {
         ok: false,
         error: {
@@ -269,6 +296,14 @@ export async function AdminConfig(ctx: IContext, next: Koa.Next): Promise<void> 
       };
       setAdminState(newConfig, meta);
 
+      appendAdminAuditEvent({
+        time: now,
+        action: 'config.reload',
+        actor: 'admin',
+        result: 'success',
+        details: { revision, namespaceCount: Object.keys(newConfig.namespaces).length },
+      });
+
       jsonResponse(ctx, 200, {
         ok: true,
         data: {
@@ -288,6 +323,14 @@ export async function AdminConfig(ctx: IContext, next: Koa.Next): Promise<void> 
         },
       });
     } catch (err) {
+      appendAdminAuditEvent({
+        time: new Date().toISOString(),
+        action: 'config.reload',
+        actor: 'admin',
+        result: 'failure',
+        details: { message: err instanceof Error ? err.message : 'Failed to reload config' },
+      });
+
       jsonResponse(ctx, 500, {
         ok: false,
         error: {
@@ -356,6 +399,82 @@ export async function AdminConfig(ctx: IContext, next: Koa.Next): Promise<void> 
     jsonResponse(ctx, 200, {
       ok: true,
       data: Metrics.getNamespaceSummaries(namespaces),
+    });
+    return;
+  }
+
+  if (ctx.method === 'POST' && subPath === '/purge') {
+    let body: unknown;
+    try {
+      body = await readBody(ctx);
+    } catch {
+      jsonResponse(ctx, 400, { ok: false, error: { code: 'PURGE_DENIED', message: 'Invalid JSON body' } });
+      return;
+    }
+
+    const b = body as { key?: string; pattern?: string; dryRun?: boolean };
+    const key = b.key ? String(b.key) : undefined;
+    const pattern = b.pattern ? String(b.pattern) : undefined;
+    const dryRun = b.dryRun === true;
+
+    if (!key && !pattern) {
+      jsonResponse(ctx, 400, {
+        ok: false,
+        error: { code: 'PURGE_DENIED', message: 'Provide key or pattern' },
+      });
+      return;
+    }
+
+    const warnings = pattern ? ([broadPatternWarning(pattern)].filter(Boolean) as string[]) : [];
+
+    try {
+      const deleted = dryRun ? 0 : key ? await Cache.purge(key) : await Cache.purgeByPattern(pattern as string);
+      appendAdminAuditEvent({
+        time: new Date().toISOString(),
+        action: 'admin.purge',
+        actor: 'admin',
+        result: 'success',
+        details: { key: key || null, pattern: pattern || null, dryRun, deleted, warnings },
+      });
+
+      jsonResponse(ctx, 200, {
+        ok: true,
+        data: {
+          purged: !dryRun,
+          dryRun,
+          deleted,
+          warnings,
+        },
+      });
+    } catch (err) {
+      appendAdminAuditEvent({
+        time: new Date().toISOString(),
+        action: 'admin.purge',
+        actor: 'admin',
+        result: 'failure',
+        details: {
+          key: key || null,
+          pattern: pattern || null,
+          dryRun,
+          message: err instanceof Error ? err.message : 'Purge failed',
+        },
+      });
+
+      jsonResponse(ctx, 500, {
+        ok: false,
+        error: {
+          code: 'PURGE_DENIED',
+          message: err instanceof Error ? err.message : 'Purge failed',
+        },
+      });
+    }
+    return;
+  }
+
+  if (ctx.method === 'GET' && subPath === '/audit') {
+    jsonResponse(ctx, 200, {
+      ok: true,
+      data: getAdminAuditEvents(),
     });
     return;
   }

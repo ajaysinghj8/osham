@@ -1044,6 +1044,47 @@ describe('Admin API – Config Endpoints', function () {
     assert.strictEqual(typeof dummyRest.latency.p95, 'number');
   });
 
+  it('POST /__osham/admin/purge should return warnings for broad patterns', async function () {
+    const res = await client
+      .post('/__osham/admin/purge')
+      .set('x-osham-admin-secret', ADMIN_SECRET)
+      .send({ pattern: '**' });
+    assert.strictEqual(res.status, 200);
+    const body = JSON.parse(res.text);
+    assert.strictEqual(body.ok, true);
+    assert.strictEqual(body.data.purged, true);
+    assert.ok(Array.isArray(body.data.warnings));
+    assert.ok(body.data.warnings.length > 0);
+  });
+
+  it('POST /__osham/admin/purge should support dryRun', async function () {
+    const res = await client
+      .post('/__osham/admin/purge')
+      .set('x-osham-admin-secret', ADMIN_SECRET)
+      .send({ pattern: 'O:dummyRest:/employees*', dryRun: true });
+    assert.strictEqual(res.status, 200);
+    const body = JSON.parse(res.text);
+    assert.strictEqual(body.ok, true);
+    assert.strictEqual(body.data.purged, false);
+    assert.strictEqual(body.data.dryRun, true);
+    assert.strictEqual(body.data.deleted, 0);
+  });
+
+  it('GET /__osham/admin/audit should return recent admin events', async function () {
+    await client
+      .post('/__osham/admin/purge')
+      .set('x-osham-admin-secret', ADMIN_SECRET)
+      .send({ pattern: '**', dryRun: true })
+      .expect(200);
+
+    const res = await client.get('/__osham/admin/audit').set('x-osham-admin-secret', ADMIN_SECRET);
+    assert.strictEqual(res.status, 200);
+    const body = JSON.parse(res.text);
+    assert.strictEqual(body.ok, true);
+    assert.ok(Array.isArray(body.data));
+    assert.ok(body.data.some(event => event.action === 'admin.purge'));
+  });
+
   it('Unknown admin route should return 404 with ok:false', async function () {
     const res = await client.get('/__osham/admin/unknown-route').set('x-osham-admin-secret', ADMIN_SECRET);
     assert.strictEqual(res.status, 404);
