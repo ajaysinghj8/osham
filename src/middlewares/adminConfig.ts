@@ -15,12 +15,23 @@ const ADMIN_BASE = '/__osham/admin';
  * Auth is bypassed only if OSHAM_ADMIN_ALLOW_INSECURE_LOCAL=true is set explicitly.
  * If OSHAM_ADMIN_SECRET is set, the correct header value is always required.
  */
+function isLocalRequest(ctx: IContext): boolean {
+  const remoteAddress = ctx.req.socket.remoteAddress;
+  if (!remoteAddress) return false;
+  return (
+    remoteAddress === '127.0.0.1' ||
+    remoteAddress === '::1' ||
+    remoteAddress === '::ffff:127.0.0.1' ||
+    remoteAddress.startsWith('::ffff:127.')
+  );
+}
+
 function checkAdminAuth(ctx: IContext): boolean {
   const adminSecret = process.env.OSHAM_ADMIN_SECRET;
 
   if (!adminSecret) {
     const allowInsecure = process.env.OSHAM_ADMIN_ALLOW_INSECURE_LOCAL === 'true';
-    if (!allowInsecure) {
+    if (!allowInsecure || !isLocalRequest(ctx)) {
       jsonResponse(ctx, 401, {
         ok: false,
         error: {

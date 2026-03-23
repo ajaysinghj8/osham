@@ -799,6 +799,25 @@ describe('Admin API – Auth', function () {
     assert.strictEqual(body.ok, false);
     assert.strictEqual(body.error.code, 'UNAUTHORIZED');
   });
+
+  it('Should allow local insecure admin access only when explicitly enabled', async function () {
+    delete process.env.OSHAM_ADMIN_SECRET;
+    process.env.OSHAM_ADMIN_ALLOW_INSECURE_LOCAL = 'true';
+    const res = await client.get('/__osham/admin/config');
+    assert.strictEqual(res.status, 200);
+    const body = JSON.parse(res.text);
+    assert.strictEqual(body.ok, true);
+  });
+
+  it('Should still require the admin secret when both secret and insecure-local are set', async function () {
+    process.env.OSHAM_ADMIN_SECRET = 'test-admin-secret';
+    process.env.OSHAM_ADMIN_ALLOW_INSECURE_LOCAL = 'true';
+    const res = await client.get('/__osham/admin/config');
+    assert.strictEqual(res.status, 401);
+    const body = JSON.parse(res.text);
+    assert.strictEqual(body.ok, false);
+    assert.strictEqual(body.error.code, 'UNAUTHORIZED');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -831,10 +850,6 @@ describe('Admin API – Config Endpoints', function () {
       process.env.OSHAM_ADMIN_ALLOW_INSECURE_LOCAL = prevInsecure;
     }
   });
-
-  function authed() {
-    return { set: (req) => req.set('x-osham-admin-secret', ADMIN_SECRET) };
-  }
 
   it('GET /__osham/admin/config should return structured config', async function () {
     const res = await client.get('/__osham/admin/config').set('x-osham-admin-secret', ADMIN_SECRET);
@@ -968,9 +983,7 @@ describe('Admin API – Config Endpoints', function () {
   });
 
   it('POST /__osham/admin/config/reload should return applied:true with summary', async function () {
-    const res = await client
-      .post('/__osham/admin/config/reload')
-      .set('x-osham-admin-secret', ADMIN_SECRET);
+    const res = await client.post('/__osham/admin/config/reload').set('x-osham-admin-secret', ADMIN_SECRET);
     assert.strictEqual(res.status, 200);
     const body = JSON.parse(res.text);
     assert.strictEqual(body.ok, true);
