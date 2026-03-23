@@ -1,0 +1,1 @@
+{"root":["./src/main.tsx","./src/router.tsx","./src/screens/AuditPage.tsx","./src/screens/ConfigPage.tsx","./src/screens/DashboardPage.tsx","./src/screens/HealthPage.tsx","./src/screens/MetricsPage.tsx","./src/screens/NotFoundPage.tsx","./src/screens/PurgePage.tsx","./src/ui/Card.tsx","./src/ui/Page.tsx","./src/ui/Sidebar.tsx"],"version":"5.9.3"}
