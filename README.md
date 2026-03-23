@@ -74,6 +74,40 @@ dummyRest:
       cache: false
 ```
 
+## Allow / Deny URL patterns
+
+Each namespace accepts optional `allow` and `deny` glob pattern lists that control which paths Osham proxies. Requests blocked by these rules receive a `403` response with the header `x-osham-cache: denied`.
+
+**Precedence rules:**
+
+- If `deny` is set and the path matches any pattern → **403 Forbidden** (deny always wins).
+- Else if `allow` is set and the path does **not** match any pattern → **403 Forbidden**.
+- If neither `allow` nor `deny` is present, all paths within the namespace are handled normally (existing behavior unchanged).
+
+**Example:**
+
+```yaml
+myNs:
+  expose: '/api/v1/*'
+  target: 'http://localhost:3000'
+  cache:
+    expires: 10s
+  allow:
+    - '/employees/**'
+    - '/employee/*'
+  deny:
+    - '/employees/private/**'
+```
+
+In this example:
+
+- `/employees/123` → proxied (matches allow)
+- `/employee/5` → proxied (matches allow)
+- `/employees/private/data` → **403** (deny wins, even though it also matches `/employees/**` in allow)
+- `/departments/1` → **403** (not in allow list)
+
+Patterns follow glob syntax (e.g. `*` matches a single path segment, `**` matches any number of segments).
+
 ## Purge cache (administrative)
 
 Osham provides an admin endpoint to invalidate cache by exact key or by pattern. See the detailed guide:

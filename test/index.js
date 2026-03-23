@@ -107,6 +107,17 @@ dummyRest:
           - x-locale
     /employee/2/:
       cache: false
+restrictedRest:
+  expose: '/restricted/*'
+  target: 'http://localhost:${stubPort}'
+  changeOrigin: true
+  cache:
+    expires: 10s
+  allow:
+    - '/employees/**'
+    - '/employee/*'
+  deny:
+    - '/employees/private/**'
 `;
   fs.writeFileSync(path.join(tempDir, 'cache-config.yml'), cacheConfig);
 
@@ -152,6 +163,302 @@ after(function (done) {
   }
 
   if (pending === 0) done();
+});
+
+describe('Allow/Deny URL Patterns', function () {
+  this.timeout(5000);
+
+  it('Should allow a path matching an allow pattern', async function () {
+    const res = await client.get('/restricted/employees/123');
+    assert.strictEqual(res.headers['x-osham-cache'], undefined, 'should not be denied');
+    assert.notStrictEqual(res.status, 403, 'status should not be 403');
+  });
+
+  it('Should allow a path matching another allow pattern', async function () {
+    const res = await client.get('/restricted/employee/5');
+    assert.strictEqual(res.headers['x-osham-cache'], undefined, 'should not be denied');
+    assert.notStrictEqual(res.status, 403, 'status should not be 403');
+  });
+
+  it('Should deny a path not matching any allow pattern', async function () {
+    const res = await client.get('/restricted/departments/1');
+    assert.strictEqual(res.status, 403);
+    assert.strictEqual(res.headers['x-osham-cache'], 'denied');
+  });
+
+  it('Should deny a path matching a deny pattern even if it also matches allow', async function () {
+    // /employees/private/secret matches allow (/employees/**) but deny wins
+    const res = await client.get('/restricted/employees/private/secret');
+    assert.strictEqual(res.status, 403);
+    assert.strictEqual(res.headers['x-osham-cache'], 'denied');
+  });
+
+  it('Should deny a path matching deny but not in allow', async function () {
+    const res = await client.get('/restricted/employees/private/other');
+    assert.strictEqual(res.status, 403);
+    assert.strictEqual(res.headers['x-osham-cache'], 'denied');
+  });
+});
+
+describe('Startup Validation', function () {
+  this.timeout(5000);
+
+  function loadServerModuleWithEnv(env) {
+    const serverModulePath = require.resolve('../lib/server');
+    const previousEnv = {
+      SECURE: process.env.SECURE,
+      SSL_KEY: process.env.SSL_KEY,
+      SSL_CERT: process.env.SSL_CERT,
+      PORT: process.env.PORT,
+    };
+
+    delete require.cache[serverModulePath];
+    Object.assign(process.env, env);
+
+    try {
+      return require('../lib/server');
+    } finally {
+      delete require.cache[serverModulePath];
+      for (const [key, value] of Object.entries(previousEnv)) {
+        if (value === undefined) {
+          delete process.env[key];
+        } else {
+          process.env[key] = value;
+        }
+      }
+    }
+  }
+
+  it('Should throw when SECURE=true and SSL_KEY is missing', function () {
+    assert.throws(
+      () => loadServerModuleWithEnv({ SECURE: 'true', SSL_KEY: '', SSL_CERT: '/tmp/cert.pem', PORT: '0' }),
+      /SECURE=true requires SSL_KEY env var/,
+    );
+  });
+
+  it('Should throw when SECURE=true and SSL_CERT is missing', function () {
+    assert.throws(
+      () => loadServerModuleWithEnv({ SECURE: 'true', SSL_KEY: '/tmp/key.pem', SSL_CERT: '', PORT: '0' }),
+      /SECURE=true requires SSL_CERT env var/,
+    );
+  });
+
+  it('Should throw when SECURE=true and SSL key file does not exist', function () {
+    assert.throws(
+      () =>
+        loadServerModuleWithEnv({
+          SECURE: 'true',
+          SSL_KEY: '/tmp/does-not-exist-key.pem',
+          SSL_CERT: '/tmp/also-missing-cert.pem',
+          PORT: '0',
+        }),
+      /could not find SSL key file/,
+    );
+  });
+});
+
+describe('Config Validation', function () {
+  this.timeout(5000);
+
+  let validationTempDir;
+
+  before(function () {
+    validationTempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'osham-validation-'));
+  });
+
+  after(function () {
+    try {
+      if (originalCwd) process.chdir(originalCwd);
+    } catch (e) {
+      // ignore
+    }
+  });
+
+  function withConfig(yaml, fn) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'osham-cfg-'));
+    fs.writeFileSync(path.join(dir, 'cache-config.yml'), yaml);
+    const prev = process.cwd();
+    process.chdir(dir);
+    try {
+      return fn();
+    } finally {
+      process.chdir(prev);
+    }
+  }
+
+  it('Should throw when cache-config.yml is missing', function () {
+    process.chdir(validationTempDir);
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { getCacheConfig } = require('../lib/config.reader');
+    assert.throws(() => getCacheConfig(), /cache-config\.yml not found/);
+  });
+
+  it('Should throw when version field is missing', function () {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { getCacheConfig } = require('../lib/config.reader');
+    withConfig(`myNs:\n  expose: '/api/*'\n  target: 'http://localhost:3000'\n`, () =>
+      assert.throws(() => getCacheConfig(), /missing required field "version"/),
+    );
+  });
+
+  it('Should throw when no namespace is defined', function () {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { getCacheConfig } = require('../lib/config.reader');
+    withConfig(`version: '1'\n`, () => assert.throws(() => getCacheConfig(), /at least one proxy namespace/));
+  });
+
+  it('Should throw when namespace is missing expose', function () {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { getCacheConfig } = require('../lib/config.reader');
+    withConfig(`version: '1'\nmyNs:\n  target: 'http://localhost:3000'\n`, () =>
+      assert.throws(() => getCacheConfig(), /missing required string field "expose"/),
+    );
+  });
+
+  it('Should throw when namespace is missing target', function () {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { getCacheConfig } = require('../lib/config.reader');
+    withConfig(`version: '1'\nmyNs:\n  expose: '/api/*'\n`, () =>
+      assert.throws(() => getCacheConfig(), /missing required string field "target"/),
+    );
+  });
+
+  it('Should accept a valid minimal config', function () {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { getCacheConfig } = require('../lib/config.reader');
+    withConfig(`version: '1'\nmyNs:\n  expose: '/api/*'\n  target: 'http://localhost:3000'\n`, () =>
+      assert.doesNotThrow(() => getCacheConfig()),
+    );
+  });
+
+  it('Should return structured IFullConfig with globalConfig and namespaces', function () {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { getCacheConfig } = require('../lib/config.reader');
+    withConfig(
+      `version: '1'\nxResponseTime: true\nhealth: true\npurge: true\nmyNs:\n  expose: '/api/*'\n  target: 'http://localhost:3000'\n`,
+      () => {
+        const cfg = getCacheConfig();
+        assert.ok(cfg.globalConfig, 'should have globalConfig');
+        assert.ok(cfg.namespaces, 'should have namespaces');
+        assert.strictEqual(cfg.globalConfig.version, '1');
+        assert.strictEqual(cfg.globalConfig.xResponseTime, true);
+        assert.strictEqual(cfg.globalConfig.health, true);
+        assert.strictEqual(cfg.globalConfig.purge, true);
+        assert.strictEqual(cfg.globalConfig.metrics, false);
+        assert.ok(cfg.namespaces.myNs, 'should have myNs namespace');
+        assert.strictEqual(cfg.namespaces.myNs.expose, '/api/*');
+        assert.strictEqual(cfg.namespaces.myNs.target, 'http://localhost:3000');
+      },
+    );
+  });
+
+  it('Should throw when global boolean flag is not a boolean', function () {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { getCacheConfig } = require('../lib/config.reader');
+    withConfig(`version: '1'\nhealth: yes_please\nmyNs:\n  expose: '/api/*'\n  target: 'http://localhost:3000'\n`, () =>
+      assert.throws(() => getCacheConfig(), /"health" must be a boolean/),
+    );
+  });
+
+  it('Should throw when namespace port is not a number', function () {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { getCacheConfig } = require('../lib/config.reader');
+    withConfig(
+      `version: '1'\nmyNs:\n  expose: '/api/*'\n  target: 'http://localhost:3000'\n  port: "not-a-number"\n`,
+      () => assert.throws(() => getCacheConfig(), /"port" must be a number/),
+    );
+  });
+
+  it('Should throw when namespace timeout is not a number', function () {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { getCacheConfig } = require('../lib/config.reader');
+    withConfig(`version: '1'\nmyNs:\n  expose: '/api/*'\n  target: 'http://localhost:3000'\n  timeout: "fast"\n`, () =>
+      assert.throws(() => getCacheConfig(), /"timeout" must be a number/),
+    );
+  });
+
+  it('Should throw when namespace cache is not an object or false', function () {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { getCacheConfig } = require('../lib/config.reader');
+    withConfig(`version: '1'\nmyNs:\n  expose: '/api/*'\n  target: 'http://localhost:3000'\n  cache: "invalid"\n`, () =>
+      assert.throws(() => getCacheConfig(), /"cache" must be an object, false, or omitted/),
+    );
+  });
+
+  it('Should throw when cache.query is not false or array of strings', function () {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { getCacheConfig } = require('../lib/config.reader');
+    withConfig(
+      `version: '1'\nmyNs:\n  expose: '/api/*'\n  target: 'http://localhost:3000'\n  cache:\n    query: "all"\n`,
+      () => assert.throws(() => getCacheConfig(), /"cache.query" must be false or an array of strings/),
+    );
+  });
+
+  it('Should throw when cache.headers is not false or array of strings', function () {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { getCacheConfig } = require('../lib/config.reader');
+    withConfig(
+      `version: '1'\nmyNs:\n  expose: '/api/*'\n  target: 'http://localhost:3000'\n  cache:\n    headers: 123\n`,
+      () => assert.throws(() => getCacheConfig(), /"cache.headers" must be false or an array of strings/),
+    );
+  });
+
+  it('Should throw when rules entry is not an object', function () {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { getCacheConfig } = require('../lib/config.reader');
+    withConfig(
+      `version: '1'\nmyNs:\n  expose: '/api/*'\n  target: 'http://localhost:3000'\n  rules:\n    /foo/: "invalid"\n`,
+      () => assert.throws(() => getCacheConfig(), /must be an object with a "cache" field/),
+    );
+  });
+
+  it('Should accept cache: false on a namespace', function () {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { getCacheConfig } = require('../lib/config.reader');
+    withConfig(`version: '1'\nmyNs:\n  expose: '/api/*'\n  target: 'http://localhost:3000'\n  cache: false\n`, () => {
+      const cfg = getCacheConfig();
+      assert.strictEqual(cfg.namespaces.myNs.cache, false);
+    });
+  });
+
+  it('Should accept cache: false on a rule', function () {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { getCacheConfig } = require('../lib/config.reader');
+    withConfig(
+      `version: '1'\nmyNs:\n  expose: '/api/*'\n  target: 'http://localhost:3000'\n  rules:\n    /foo/:\n      cache: false\n`,
+      () => assert.doesNotThrow(() => getCacheConfig()),
+    );
+  });
+
+  it('Should throw when allow is not an array of strings', function () {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { getCacheConfig } = require('../lib/config.reader');
+    withConfig(
+      `version: '1'\nmyNs:\n  expose: '/api/*'\n  target: 'http://localhost:3000'\n  allow: "not-an-array"\n`,
+      () => assert.throws(() => getCacheConfig(), /"allow" must be an array of glob pattern strings/),
+    );
+  });
+
+  it('Should throw when deny is not an array of strings', function () {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { getCacheConfig } = require('../lib/config.reader');
+    withConfig(`version: '1'\nmyNs:\n  expose: '/api/*'\n  target: 'http://localhost:3000'\n  deny:\n    - 123\n`, () =>
+      assert.throws(() => getCacheConfig(), /"deny" must be an array of glob pattern strings/),
+    );
+  });
+
+  it('Should accept valid allow and deny arrays', function () {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { getCacheConfig } = require('../lib/config.reader');
+    withConfig(
+      `version: '1'\nmyNs:\n  expose: '/api/*'\n  target: 'http://localhost:3000'\n  allow:\n    - '/employees/**'\n  deny:\n    - '/employees/private/**'\n`,
+      () => {
+        const cfg = getCacheConfig();
+        assert.deepStrictEqual(cfg.namespaces.myNs.allow, ['/employees/**']);
+        assert.deepStrictEqual(cfg.namespaces.myNs.deny, ['/employees/private/**']);
+      },
+    );
+  });
 });
 
 describe('Specifications', function () {

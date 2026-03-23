@@ -9,6 +9,7 @@ import { createProxy } from '../proxy';
 
 import * as Koa from 'koa';
 import { OshamHeaders } from '../osham.headers';
+import { minimatch } from 'minimatch';
 // eslint-disable-next-line
 const pathToRegExp = require('path-to-regexp');
 
@@ -32,6 +33,22 @@ export function createNameSpaceHandler(
     logger(`${ctx.path} matched!!`);
     const pathToCall = ctx.path.match(namespacePath)[1];
     logger(`${pathToCall} will be processed!`);
+
+    // Allow/deny pattern enforcement: deny wins over allow.
+    // Normalize to an absolute path so patterns like '/employees/**' match consistently.
+    const matchPath = pathToCall.startsWith('/') ? pathToCall : `/${pathToCall}`;
+    if (options.deny && options.deny.some(pattern => minimatch(matchPath, pattern))) {
+      ctx.statusCode = 403;
+      ctx.set('x-osham-cache', 'denied');
+      ctx.body = 'Forbidden';
+      return ctx.respond();
+    }
+    if (options.allow && !options.allow.some(pattern => minimatch(matchPath, pattern))) {
+      ctx.statusCode = 403;
+      ctx.set('x-osham-cache', 'denied');
+      ctx.body = 'Forbidden';
+      return ctx.respond();
+    }
 
     const cacheConfig = configContext.getCacheConfig(pathToCall);
     const proxyPath = pathToCall + (ctx.search || '');

@@ -1,5 +1,6 @@
 import { config } from 'dotenv';
 config();
+import * as Debug from 'debug';
 import { Server } from './server';
 import { IncomingMessage, ServerResponse } from 'http';
 import { getCacheConfig } from './config.reader';
@@ -10,59 +11,45 @@ import { MetricsEndpoint } from './middlewares/metricsEndpoint';
 import { createNameSpaceHandler } from './middlewares/nameSpaceHandler';
 import { CtxProvider } from './ctx.provider';
 import * as compose from 'koa-compose';
-import { isNameSpace } from './utils';
-import { INameSpaceOptions, IContext } from './types';
+import { IContext } from './types';
 import { ComposedMiddleware } from 'koa-compose';
 // import { timeoutMiddlewareProvider } from './middlewares/timeoutMiddleware';
 
-const middlewares: Array<ComposedMiddleware<IContext>> = [];
-const cacheConfig = getCacheConfig();
+const logger = Debug('acp:index');
 
-// /**
-//  * For each namespace
-//  *  create handler
-//  */
+const middlewares: Array<ComposedMiddleware<IContext>> = [];
+const { globalConfig, namespaces } = getCacheConfig();
 
 if (process.env.TIMEOUT) {
   // middlewares.push(timeoutMiddlewareProvider(+process.env.TIMEOUT));
 }
-for (const key in cacheConfig) {
-  if (!Object.prototype.hasOwnProperty.call(cacheConfig, key)) continue;
-  switch (key) {
-    case 'version':
-    case 'changeOrigin':
-      break;
-    case 'xResponseTime':
-      middlewares.push(RouteTimeReqRes);
-      break;
-    case 'health':
-      middlewares.push(HealthCheck);
-      break;
-    case 'purge':
-      if (Reflect.get(cacheConfig, key) === true) {
-        middlewares.push(PurgeCache);
-      }
-      break;
-    case 'metrics':
-      if (Reflect.get(cacheConfig, key) === true) {
-        middlewares.push(MetricsEndpoint);
-      }
-      break;
-    default: {
-      // it is namespace
-      const options: INameSpaceOptions = Reflect.get(cacheConfig, key);
-      if (isNameSpace(key, options)) {
-        middlewares.push(createNameSpaceHandler(key, options));
-      }
-    }
-  }
+
+if (globalConfig.xResponseTime) middlewares.push(RouteTimeReqRes);
+if (globalConfig.health) middlewares.push(HealthCheck);
+if (globalConfig.purge) middlewares.push(PurgeCache);
+if (globalConfig.metrics) middlewares.push(MetricsEndpoint);
+
+for (const [key, options] of Object.entries(namespaces)) {
+  middlewares.push(createNameSpaceHandler(key, options));
 }
 
 Server.on('request', async (req: IncomingMessage, res: ServerResponse) => {
   const ctx = CtxProvider(req, res);
   const chain = compose(middlewares);
   res.statusCode = 404;
-  const onerror = (err: string) => res.end(err);
+
+  const handleError = (err: unknown) => {
+    const message = err instanceof Error ? err.message : String(err);
+    logger(`Unhandled request error for ${req.method} ${req.url}: ${message}`);
+    if (!res.headersSent) {
+      res.statusCode = 500;
+      res.setHeader('content-type', 'text/plain; charset=utf-8');
+      res.end('Internal Server Error');
+      return;
+    }
+    res.end();
+  };
+
   const handleResponse = () => ctx.respond();
-  return chain(ctx).then(handleResponse).catch(onerror);
+  return chain(ctx).then(handleResponse).catch(handleError);
 });
