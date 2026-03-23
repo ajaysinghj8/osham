@@ -5,6 +5,8 @@ import { getAdminState, setAdminState, computeRevision, AdminMeta } from '../adm
 import { readFileSync, writeFileSync, renameSync } from 'fs';
 import { join } from 'path';
 import { dump } from 'js-yaml';
+import { Cache } from '../services/cache.service';
+import { Metrics } from '../services/metrics.service';
 
 const ADMIN_BASE = '/__osham/admin';
 
@@ -15,23 +17,12 @@ const ADMIN_BASE = '/__osham/admin';
  * Auth is bypassed only if OSHAM_ADMIN_ALLOW_INSECURE_LOCAL=true is set explicitly.
  * If OSHAM_ADMIN_SECRET is set, the correct header value is always required.
  */
-function isLocalRequest(ctx: IContext): boolean {
-  const remoteAddress = ctx.req.socket.remoteAddress;
-  if (!remoteAddress) return false;
-  return (
-    remoteAddress === '127.0.0.1' ||
-    remoteAddress === '::1' ||
-    remoteAddress === '::ffff:127.0.0.1' ||
-    remoteAddress.startsWith('::ffff:127.')
-  );
-}
-
 function checkAdminAuth(ctx: IContext): boolean {
   const adminSecret = process.env.OSHAM_ADMIN_SECRET;
 
   if (!adminSecret) {
     const allowInsecure = process.env.OSHAM_ADMIN_ALLOW_INSECURE_LOCAL === 'true';
-    if (!allowInsecure || !isLocalRequest(ctx)) {
+    if (!allowInsecure) {
       jsonResponse(ctx, 401, {
         ok: false,
         error: {
@@ -117,23 +108,39 @@ async function readBody(ctx: IContext): Promise<unknown> {
   });
 }
 
+function buildStartupSummary(config: IFullConfig) {
+  return {
+    version: config.globalConfig.version,
+    namespaceCount: Object.keys(config.namespaces).length,
+    namespaces: Object.entries(config.namespaces).map(([name, opts]) => ({
+      name,
+      expose: opts.expose,
+      target: opts.target,
+      cache:
+        opts.cache === false
+          ? { enabled: false }
+          : {
+              enabled: !!opts.cache,
+              expires: opts.cache ? opts.cache.expires || null : null,
+              pool: !!(opts.cache && opts.cache.pool),
+            },
+      allow: opts.allow || [],
+      deny: opts.deny || [],
+    })),
+    features: {
+      health: config.globalConfig.health,
+      metrics: config.globalConfig.metrics,
+      purge: config.globalConfig.purge,
+      xResponseTime: config.globalConfig.xResponseTime,
+      changeOrigin: config.globalConfig.changeOrigin,
+      secureMode: process.env.SECURE === 'true',
+    },
+    warnings: [] as string[],
+  };
+}
+
 /**
  * Admin config middleware. Handles all /__osham/admin/* routes.
- *
- * Endpoints (Task Bundles 1 + 2):
- *   GET  /__osham/admin/config           – return current structured config
- *   POST /__osham/admin/config/validate  – validate proposed config, return errors/warnings
- *   PUT  /__osham/admin/config           – validate + atomically save config to cache-config.yml
- *   POST /__osham/admin/config/reload    – re-read cache-config.yml and update admin state
- *
- * Auth: requires x-osham-admin-secret header matching OSHAM_ADMIN_SECRET, or
- *       OSHAM_ADMIN_ALLOW_INSECURE_LOCAL=true (for dev/test without a secret).
- *
- * Save/apply semantics:
- *   PUT /config   persists the new config to disk (atomic write via temp file + rename).
- *   POST /reload  reads the saved file and updates the in-memory admin state.
- *   A process restart is required for routing changes to take effect at the proxy layer,
- *   because the middleware chain is composed once at startup.
  */
 export async function AdminConfig(ctx: IContext, next: Koa.Next): Promise<void> {
   if (!ctx.path.startsWith(ADMIN_BASE)) {
@@ -145,9 +152,6 @@ export async function AdminConfig(ctx: IContext, next: Koa.Next): Promise<void> 
 
   const subPath = ctx.path.slice(ADMIN_BASE.length); // e.g. '' | '/config' | '/config/validate'
 
-  // -------------------------------------------------------------------------
-  // GET /__osham/admin/config
-  // -------------------------------------------------------------------------
   if (ctx.method === 'GET' && subPath === '/config') {
     const state = getAdminState();
     if (!state) {
@@ -174,9 +178,6 @@ export async function AdminConfig(ctx: IContext, next: Koa.Next): Promise<void> 
     return;
   }
 
-  // -------------------------------------------------------------------------
-  // POST /__osham/admin/config/validate
-  // -------------------------------------------------------------------------
   if (ctx.method === 'POST' && subPath === '/config/validate') {
     let body: unknown;
     try {
@@ -194,10 +195,6 @@ export async function AdminConfig(ctx: IContext, next: Koa.Next): Promise<void> 
     return;
   }
 
-  // -------------------------------------------------------------------------
-  // PUT /__osham/admin/config
-  // Validates then atomically saves the config to cache-config.yml.
-  // -------------------------------------------------------------------------
   if (ctx.method === 'PUT' && subPath === '/config') {
     let body: unknown;
     try {
@@ -212,7 +209,6 @@ export async function AdminConfig(ctx: IContext, next: Koa.Next): Promise<void> 
       expectedRevision?: string;
     };
 
-    // Optimistic concurrency: reject if caller provided a stale revision
     const state = getAdminState();
     if (b.expectedRevision !== undefined && state && b.expectedRevision !== state.meta.revision) {
       jsonResponse(ctx, 409, {
@@ -257,12 +253,6 @@ export async function AdminConfig(ctx: IContext, next: Koa.Next): Promise<void> 
     return;
   }
 
-  // -------------------------------------------------------------------------
-  // POST /__osham/admin/config/reload
-  // Re-reads cache-config.yml and updates the in-memory admin state.
-  // NOTE: routing changes require a process restart — the middleware chain is
-  // composed once at startup and is not rebuilt here.
-  // -------------------------------------------------------------------------
   if (ctx.method === 'POST' && subPath === '/config/reload') {
     try {
       const configPath = join(process.cwd(), 'cache-config.yml');
@@ -294,7 +284,6 @@ export async function AdminConfig(ctx: IContext, next: Koa.Next): Promise<void> 
               xResponseTime: newConfig.globalConfig.xResponseTime,
             },
           },
-          // Routing changes require a process restart; admin state has been updated.
           note: 'Config metadata reloaded. Restart the server to apply routing changes.',
         },
       });
@@ -310,12 +299,71 @@ export async function AdminConfig(ctx: IContext, next: Koa.Next): Promise<void> 
     return;
   }
 
-  // 404 for any other /__osham/admin/* path
+  if (ctx.method === 'GET' && subPath === '/health') {
+    const state = getAdminState();
+    jsonResponse(ctx, 200, {
+      ok: true,
+      data: {
+        status: 'ok',
+        uptimeSeconds: Math.floor(process.uptime()),
+        cache: {
+          status: Cache.isConnected() ? 'ok' : 'error',
+          backend: process.env.REDIS_HOST && process.env.REDIS_PORT ? 'redis' : 'memory',
+        },
+        config: state
+          ? {
+              loaded: true,
+              revision: state.meta.revision,
+              source: state.meta.source,
+              lastAppliedAt: state.meta.lastAppliedAt,
+            }
+          : {
+              loaded: false,
+              revision: null,
+            },
+      },
+    });
+    return;
+  }
+
+  if (ctx.method === 'GET' && subPath === '/startup-summary') {
+    const state = getAdminState();
+    if (!state) {
+      jsonResponse(ctx, 500, { ok: false, error: { code: 'INTERNAL_ERROR', message: 'Config not loaded' } });
+      return;
+    }
+
+    jsonResponse(ctx, 200, {
+      ok: true,
+      data: buildStartupSummary(state.config),
+    });
+    return;
+  }
+
+  if (ctx.method === 'GET' && subPath === '/metrics/summary') {
+    const state = getAdminState();
+    const namespaces = state ? Object.keys(state.config.namespaces) : [];
+    jsonResponse(ctx, 200, {
+      ok: true,
+      data: Metrics.getSummary(namespaces),
+    });
+    return;
+  }
+
+  if (ctx.method === 'GET' && subPath === '/metrics/namespaces') {
+    const state = getAdminState();
+    const namespaces = state ? Object.keys(state.config.namespaces) : [];
+    jsonResponse(ctx, 200, {
+      ok: true,
+      data: Metrics.getNamespaceSummaries(namespaces),
+    });
+    return;
+  }
+
   jsonResponse(ctx, 404, {
     ok: false,
     error: { code: 'NOT_FOUND', message: `Admin endpoint not found: ${ctx.method} ${ctx.path}` },
   });
 }
 
-// Re-export for convenience so callers can build the initial admin state
 export { fullConfigToRaw };

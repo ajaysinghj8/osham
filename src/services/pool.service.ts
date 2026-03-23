@@ -2,10 +2,22 @@ import { Cache } from './cache.service';
 import * as Debug from 'debug';
 import { EventEmitter } from 'events';
 import { timeOutResponse } from '../utils';
+import { Metrics } from './metrics.service';
 
 const logger = Debug('acp:service:pool');
 
 const TIMEOUT: number = +process.env.TIMEOUT || 5000;
+
+function getNamespaceFromKey(key: string): string {
+  const match = /^O:([^:]+):/.exec(key);
+  return match ? match[1] : 'unknown';
+}
+
+function syncPooledMetric(key: string): void {
+  const namespace = getNamespaceFromKey(key);
+  const active = [...RequestPool.pool].filter(poolKey => getNamespaceFromKey(poolKey) === namespace).length;
+  Metrics.setPooledRequests(namespace, active);
+}
 
 export class RequestPool {
   static pool: Set<string> = new Set();
@@ -16,6 +28,7 @@ export class RequestPool {
   }
   static add(key: string): RequestPool {
     RequestPool.pool.add(key);
+    syncPooledMetric(key);
     return RequestPool;
   }
 
@@ -24,6 +37,7 @@ export class RequestPool {
     return new Promise(resolve => {
       const timeout = setTimeout(() => {
         RequestPool.pool.delete(key);
+        syncPooledMetric(key);
         RequestPool.ee.off(key, handler);
         logger(`TIMEOUT ${key}`);
         handler(timeOutResponse('RequestPool failed'));
@@ -42,6 +56,7 @@ export class RequestPool {
   static async putAndPublish(key: string, data: unknown, expires: number): Promise<unknown> {
     logger(`putting and publishing for ${key}`);
     RequestPool.pool.delete(key);
+    syncPooledMetric(key);
     RequestPool.ee.emit(key, data);
     await Cache.put(key, data, expires);
     return data;
@@ -50,6 +65,7 @@ export class RequestPool {
   static async errorAndPublish(key: string, data: unknown): Promise<void> {
     logger(`error and publishing for ${key}`);
     RequestPool.pool.delete(key);
+    syncPooledMetric(key);
     RequestPool.ee.emit(key, data);
   }
 }

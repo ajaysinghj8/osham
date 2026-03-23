@@ -994,6 +994,56 @@ describe('Admin API – Config Endpoints', function () {
     assert.ok(body.data.summary.features, 'features should be in summary');
   });
 
+  it('GET /__osham/admin/health should return operational health summary', async function () {
+    const res = await client.get('/__osham/admin/health').set('x-osham-admin-secret', ADMIN_SECRET);
+    assert.strictEqual(res.status, 200);
+    const body = JSON.parse(res.text);
+    assert.strictEqual(body.ok, true);
+    assert.strictEqual(body.data.status, 'ok');
+    assert.strictEqual(typeof body.data.uptimeSeconds, 'number');
+    assert.strictEqual(body.data.config.loaded, true);
+    assert.ok(body.data.config.revision);
+  });
+
+  it('GET /__osham/admin/startup-summary should return config-derived startup summary', async function () {
+    const res = await client.get('/__osham/admin/startup-summary').set('x-osham-admin-secret', ADMIN_SECRET);
+    assert.strictEqual(res.status, 200);
+    const body = JSON.parse(res.text);
+    assert.strictEqual(body.ok, true);
+    assert.strictEqual(typeof body.data.namespaceCount, 'number');
+    assert.ok(Array.isArray(body.data.namespaces));
+    assert.ok(body.data.features);
+    assert.strictEqual(typeof body.data.features.metrics, 'boolean');
+  });
+
+  it('GET /__osham/admin/metrics/summary should return aggregate metrics', async function () {
+    await client.get('/api/v1/employees?limit=501').expect(200);
+    await client.get('/api/v1/employees?limit=501').expect(200);
+    const res = await client.get('/__osham/admin/metrics/summary').set('x-osham-admin-secret', ADMIN_SECRET);
+    assert.strictEqual(res.status, 200);
+    const body = JSON.parse(res.text);
+    assert.strictEqual(body.ok, true);
+    assert.strictEqual(typeof body.data.requests, 'number');
+    assert.strictEqual(typeof body.data.cacheHits, 'number');
+    assert.strictEqual(typeof body.data.cacheMisses, 'number');
+    assert.strictEqual(typeof body.data.hitRatio, 'number');
+  });
+
+  it('GET /__osham/admin/metrics/namespaces should return per-namespace metrics', async function () {
+    await client.get('/api/v1/employees?limit=777').expect(200);
+    const res = await client.get('/__osham/admin/metrics/namespaces').set('x-osham-admin-secret', ADMIN_SECRET);
+    assert.strictEqual(res.status, 200);
+    const body = JSON.parse(res.text);
+    assert.strictEqual(body.ok, true);
+    assert.ok(Array.isArray(body.data));
+    assert.ok(body.data.length >= 1, 'should contain configured namespaces');
+    const dummyRest = body.data.find(row => row.namespace === 'dummyRest');
+    assert.ok(dummyRest, 'dummyRest metrics should be present');
+    assert.strictEqual(typeof dummyRest.requests, 'number');
+    assert.strictEqual(typeof dummyRest.latency.p50, 'number');
+    assert.strictEqual(typeof dummyRest.latency.p95, 'number');
+  });
+
   it('Unknown admin route should return 404 with ok:false', async function () {
     const res = await client.get('/__osham/admin/unknown-route').set('x-osham-admin-secret', ADMIN_SECRET);
     assert.strictEqual(res.status, 404);
