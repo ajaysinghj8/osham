@@ -2,24 +2,19 @@ import React from 'react';
 import { Page } from '../ui/Page';
 import { Card } from '../ui/Card';
 import { apiGet } from '../api';
-import { HealthResponse, MetricsSummary } from '../types';
-
-interface StartupSummary {
-  namespaceCount: number;
-  features: Record<string, boolean>;
-}
+import { HealthResponse, MetricsSummary, StartupSummaryResponse } from '../types';
 
 export function DashboardPage() {
   const [health, setHealth] = React.useState<HealthResponse | null>(null);
   const [metrics, setMetrics] = React.useState<MetricsSummary | null>(null);
-  const [startup, setStartup] = React.useState<StartupSummary | null>(null);
+  const [startup, setStartup] = React.useState<StartupSummaryResponse | null>(null);
   const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     Promise.all([
       apiGet<HealthResponse>('/__osham/admin/health'),
       apiGet<MetricsSummary>('/__osham/admin/metrics/summary'),
-      apiGet<StartupSummary>('/__osham/admin/startup-summary'),
+      apiGet<StartupSummaryResponse>('/__osham/admin/startup-summary'),
     ])
       .then(([healthData, metricsData, startupData]) => {
         setHealth(healthData);

@@ -22,6 +22,39 @@ export interface MetricsSummary {
   cacheSizeBytes: number;
 }
 
+export interface NamespaceMetricsSummary {
+  namespace: string;
+  requests: number;
+  cacheHits: number;
+  cacheMisses: number;
+  hitRatio: number;
+  pooledRequests: number;
+  cacheSizeBytes: number;
+  latency: {
+    p50: number;
+    p95: number;
+  };
+}
+
+export interface StartupSummaryResponse {
+  version: string;
+  namespaceCount: number;
+  namespaces: Array<{
+    name: string;
+    expose: string;
+    target: string;
+    cache: {
+      enabled: boolean;
+      expires?: string | null;
+      pool?: boolean;
+    };
+    allow: string[];
+    deny: string[];
+  }>;
+  features: Record<string, boolean>;
+  warnings: string[];
+}
+
 export interface AuditEvent {
   time: string;
   action: string;
