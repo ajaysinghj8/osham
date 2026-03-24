@@ -4,6 +4,8 @@ import { Card } from '../ui/Card';
 import { apiGet } from '../api';
 import { HealthResponse, MetricsSummary, NamespaceMetricsSummary, StartupSummaryResponse } from '../types';
 
+const AUTO_REFRESH_SECONDS = 60;
+
 function formatPercent(value: number): string {
   return `${(value * 100).toFixed(1)}%`;
 }
@@ -21,6 +23,18 @@ function formatTimestamp(value?: string | null): string {
   return date.toLocaleString();
 }
 
+function formatUptime(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  return `${h}h ${m}m`;
+}
+
+function formatTime(date: Date): string {
+  return date.toLocaleTimeString();
+}
+
 export function DashboardPage() {
   const [health, setHealth] = React.useState<HealthResponse | null>(null);
   const [metrics, setMetrics] = React.useState<MetricsSummary | null>(null);
@@ -28,6 +42,8 @@ export function DashboardPage() {
   const [namespaceMetrics, setNamespaceMetrics] = React.useState<NamespaceMetricsSummary[]>([]);
   const [error, setError] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
+  const [lastRefreshed, setLastRefreshed] = React.useState<Date | null>(null);
+  const [countdown, setCountdown] = React.useState(AUTO_REFRESH_SECONDS);
 
   const load = React.useCallback(() => {
     setBusy(true);
@@ -43,6 +59,8 @@ export function DashboardPage() {
         setStartup(startupData);
         setNamespaceMetrics(namespaceMetricsData);
         setError(null);
+        setLastRefreshed(new Date());
+        setCountdown(AUTO_REFRESH_SECONDS);
       })
       .catch(err => setError(err instanceof Error ? err.message : 'Failed to load dashboard data'))
       .finally(() => setBusy(false));
@@ -51,6 +69,20 @@ export function DashboardPage() {
   React.useEffect(() => {
     load();
   }, [load]);
+
+  // Auto-refresh interval
+  React.useEffect(() => {
+    const interval = setInterval(load, AUTO_REFRESH_SECONDS * 1000);
+    return () => clearInterval(interval);
+  }, [load]);
+
+  // Countdown ticker
+  React.useEffect(() => {
+    const ticker = setInterval(() => {
+      setCountdown(prev => (prev <= 1 ? AUTO_REFRESH_SECONDS : prev - 1));
+    }, 1000);
+    return () => clearInterval(ticker);
+  }, []);
 
   const topNamespace = React.useMemo(() => {
     return [...namespaceMetrics].sort((left, right) => right.requests - left.requests)[0] || null;
@@ -69,6 +101,11 @@ export function DashboardPage() {
         <button className="button" onClick={load} disabled={busy}>
           {busy ? 'Refreshing…' : 'Refresh Dashboard'}
         </button>
+        {lastRefreshed ? (
+          <span className="toolbar-meta">
+            Last refreshed {formatTime(lastRefreshed)} — next in {countdown}s
+          </span>
+        ) : null}
       </div>
 
       {error ? <div className="code-block">{error}</div> : null}
@@ -76,8 +113,8 @@ export function DashboardPage() {
       <div className="card-grid">
         <Card title="Service Health">
           <p>Status: {health?.status || 'loading...'}</p>
-          <p>Cache: {health?.cache.backend || '—'}</p>
-          <p>Backend state: {health?.cache.status || '—'}</p>
+          <p>Uptime: {health ? formatUptime(health.uptimeSeconds) : '—'}</p>
+          <p>Cache: {health?.cache.backend || '—'} ({health?.cache.status || '—'})</p>
         </Card>
         <Card title="Config Revision">
           <p>Revision: {health?.config.revision || 'loading...'}</p>
