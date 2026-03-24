@@ -69,7 +69,7 @@
   "dependencies": {
     "debug": "^4.3.1",
     "dotenv": "^8.2.0",
-    "follow-redirects": "^1.13.1",
+    "follow-redirects": "^1.15.11",
     "js-yaml": "^4.0.0",
     "koa-compose": "^4.1.0",
     "minimatch": "^10.2.4",
