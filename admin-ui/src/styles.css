@@ -86,6 +86,11 @@ body {
   padding: 10px 12px;
 }
 
+.input-invalid {
+  border-color: #b91c1c;
+  box-shadow: 0 0 0 1px rgba(185, 28, 28, 0.35);
+}
+
 .input {
   min-width: 280px;
 }
@@ -214,6 +219,24 @@ label {
   display: grid;
   gap: 8px;
   color: #d5deea;
+}
+
+.field-issues {
+  display: grid;
+  gap: 6px;
+}
+
+.field-issue {
+  font-size: 0.88em;
+  line-height: 1.35;
+}
+
+.field-issue--error {
+  color: #fca5a5;
+}
+
+.field-issue--warning {
+  color: #fde68a;
 }
 
 .pill-list {

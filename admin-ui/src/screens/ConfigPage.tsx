@@ -190,6 +190,27 @@ function downloadDraftConfig(config: AdminConfigView) {
   URL.revokeObjectURL(url);
 }
 
+function getIssuesForPaths(validation: ValidationResult | null, paths: string[]): ValidationResult['errors'] {
+  if (!validation) return [];
+  const normalizedPaths = paths.filter(Boolean);
+  return [...validation.errors, ...validation.warnings].filter(issue =>
+    normalizedPaths.some(path => issue.field === path || issue.field.startsWith(`${path}.`)),
+  );
+}
+
+function FieldIssues(props: { issues: ValidationResult['errors'] }) {
+  if (!props.issues.length) return null;
+  return (
+    <div className="field-issues">
+      {props.issues.map((issue, index) => (
+        <div key={`${issue.code}-${issue.field}-${index}`} className={`field-issue field-issue--${issue.severity}`}>
+          {issue.message}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function ConfigPage() {
   const [config, setConfig] = React.useState<AdminConfigView | null>(null);
   const [history, setHistory] = React.useState<AdminConfigSnapshot[]>([]);
@@ -314,6 +335,15 @@ export function ConfigPage() {
 
   const currentPayload = previewState?.rawJson || '';
   const hasUnsavedChanges = !!config && currentPayload !== lastSavedSnapshot;
+
+  function issuesForGlobalField(field: string) {
+    return getIssuesForPaths(validation, [field, `globalConfig.${field}`, `global.${field}`]);
+  }
+
+  function issuesForNamespaceField(field: string) {
+    if (!selectedNamespace) return [];
+    return getIssuesForPaths(validation, [`namespaces.${selectedNamespace}.${field}`]);
+  }
 
   React.useEffect(() => {
     function handleBeforeUnload(event: BeforeUnloadEvent) {
@@ -654,7 +684,7 @@ export function ConfigPage() {
                 <label>
                   Version
                   <input
-                    className="input"
+                    className={`input${issuesForGlobalField('version').length ? ' input-invalid' : ''}`}
                     value={config.globalConfig.version}
                     onChange={e =>
                       patchConfig(current => ({
@@ -663,6 +693,7 @@ export function ConfigPage() {
                       }))
                     }
                   />
+                  <FieldIssues issues={issuesForGlobalField('version')} />
                 </label>
                 {[
                   ['health', 'Health'],
@@ -715,19 +746,39 @@ export function ConfigPage() {
                 <div className="form-grid">
                   <label>
                     Expose
-                    <input className="input" value={namespace.expose} onChange={e => patchNamespace(current => ({ ...current, expose: e.target.value }))} />
+                    <input
+                      className={`input${issuesForNamespaceField('expose').length ? ' input-invalid' : ''}`}
+                      value={namespace.expose}
+                      onChange={e => patchNamespace(current => ({ ...current, expose: e.target.value }))}
+                    />
+                    <FieldIssues issues={issuesForNamespaceField('expose')} />
                   </label>
                   <label>
                     Target
-                    <input className="input" value={namespace.target} onChange={e => patchNamespace(current => ({ ...current, target: e.target.value }))} />
+                    <input
+                      className={`input${issuesForNamespaceField('target').length ? ' input-invalid' : ''}`}
+                      value={namespace.target}
+                      onChange={e => patchNamespace(current => ({ ...current, target: e.target.value }))}
+                    />
+                    <FieldIssues issues={issuesForNamespaceField('target')} />
                   </label>
                   <label>
                     Port
-                    <input className="input" value={namespace.port} onChange={e => patchNamespace(current => ({ ...current, port: e.target.value }))} />
+                    <input
+                      className={`input${issuesForNamespaceField('port').length ? ' input-invalid' : ''}`}
+                      value={namespace.port}
+                      onChange={e => patchNamespace(current => ({ ...current, port: e.target.value }))}
+                    />
+                    <FieldIssues issues={issuesForNamespaceField('port')} />
                   </label>
                   <label>
                     Timeout (ms)
-                    <input className="input" value={namespace.timeout} onChange={e => patchNamespace(current => ({ ...current, timeout: e.target.value }))} />
+                    <input
+                      className={`input${issuesForNamespaceField('timeout').length ? ' input-invalid' : ''}`}
+                      value={namespace.timeout}
+                      onChange={e => patchNamespace(current => ({ ...current, timeout: e.target.value }))}
+                    />
+                    <FieldIssues issues={issuesForNamespaceField('timeout')} />
                   </label>
                   <label className="checkbox-row">
                     <input type="checkbox" checked={namespace.followRedirects} onChange={e => patchNamespace(current => ({ ...current, followRedirects: e.target.checked }))} />
@@ -747,7 +798,12 @@ export function ConfigPage() {
                     </label>
                     <label>
                       Expires
-                      <input className="input" value={namespace.cache.expires} onChange={e => patchNamespace(current => ({ ...current, cache: { ...current.cache, expires: e.target.value } }))} />
+                      <input
+                        className={`input${issuesForNamespaceField('cache').length ? ' input-invalid' : ''}`}
+                        value={namespace.cache.expires}
+                        onChange={e => patchNamespace(current => ({ ...current, cache: { ...current.cache, expires: e.target.value } }))}
+                      />
+                      <FieldIssues issues={issuesForNamespaceField('cache')} />
                     </label>
                     <label className="checkbox-row">
                       <input type="checkbox" checked={namespace.cache.pool} onChange={e => patchNamespace(current => ({ ...current, cache: { ...current.cache, pool: e.target.checked } }))} />
@@ -766,18 +822,36 @@ export function ConfigPage() {
                   <Card title="Access Control">
                     <label>
                       Allow patterns
-                      <textarea className="textarea" rows={6} value={allowText} onChange={e => setAllowText(e.target.value)} />
+                      <textarea
+                        className={`textarea${issuesForNamespaceField('allow').length ? ' input-invalid' : ''}`}
+                        rows={6}
+                        value={allowText}
+                        onChange={e => setAllowText(e.target.value)}
+                      />
+                      <FieldIssues issues={issuesForNamespaceField('allow')} />
                     </label>
                     <label>
                       Deny patterns
-                      <textarea className="textarea" rows={6} value={denyText} onChange={e => setDenyText(e.target.value)} />
+                      <textarea
+                        className={`textarea${issuesForNamespaceField('deny').length ? ' input-invalid' : ''}`}
+                        rows={6}
+                        value={denyText}
+                        onChange={e => setDenyText(e.target.value)}
+                      />
+                      <FieldIssues issues={issuesForNamespaceField('deny')} />
                     </label>
                   </Card>
                 </div>
 
                 <label>
                   Rules JSON (array of {`{ pattern, cache }`})
-                  <textarea className="textarea" rows={14} value={rulesText} onChange={e => setRulesText(e.target.value)} />
+                  <textarea
+                    className={`textarea${issuesForNamespaceField('rules').length ? ' input-invalid' : ''}`}
+                    rows={14}
+                    value={rulesText}
+                    onChange={e => setRulesText(e.target.value)}
+                  />
+                  <FieldIssues issues={issuesForNamespaceField('rules')} />
                 </label>
               </Card>
             ) : null}
