@@ -1,6 +1,6 @@
 import React from 'react';
 import { ApiError, apiGet, apiPost, apiPut } from '../api';
-import { AdminConfigView, CacheConfigView, NamespaceView, ValidationResult } from '../types';
+import { AdminConfigSnapshot, AdminConfigView, CacheConfigView, NamespaceView, ValidationResult } from '../types';
 import { Page } from '../ui/Page';
 import { Card } from '../ui/Card';
 
@@ -169,6 +169,7 @@ function cloneNamespaceView(namespace: NamespaceView): NamespaceView {
 
 export function ConfigPage() {
   const [config, setConfig] = React.useState<AdminConfigView | null>(null);
+  const [history, setHistory] = React.useState<AdminConfigSnapshot[]>([]);
   const [selectedNamespace, setSelectedNamespace] = React.useState<string>('');
   const [allowText, setAllowText] = React.useState('');
   const [denyText, setDenyText] = React.useState('');
@@ -181,9 +182,14 @@ export function ConfigPage() {
 
   const loadConfig = React.useCallback(async () => {
     try {
-      const data = normalizeConfig(await apiGet<AdminConfigView>('/__osham/admin/config'));
+      const [configData, historyData] = await Promise.all([
+        apiGet<AdminConfigView>('/__osham/admin/config'),
+        apiGet<AdminConfigSnapshot[]>('/__osham/admin/config/history'),
+      ]);
+      const data = normalizeConfig(configData);
       const firstNamespace = Object.keys(data.namespaces)[0] || '';
       setConfig(data);
+      setHistory(historyData);
       setSelectedNamespace(current => (current && data.namespaces[current] ? current : firstNamespace));
       setValidation(null);
       setError(null);
@@ -355,6 +361,41 @@ export function ConfigPage() {
     }
   }
 
+  async function runRollback(snapshot: AdminConfigSnapshot) {
+    if (!config) return;
+    if (hasUnsavedChanges) {
+      setError('Rollback blocked while there are unsaved editor changes. Save or refresh first so your draft is not discarded.');
+      return;
+    }
+    if (
+      !window.confirm(
+        `Roll back live config from ${config.meta.revision} to ${snapshot.revision}? This immediately rewrites cache-config.yml and applies the selected snapshot.`,
+      )
+    ) {
+      return;
+    }
+
+    setBusy(`rollback:${snapshot.revision}`);
+    setMessage(null);
+    setError(null);
+    try {
+      const data = await apiPost<{ applied: boolean; revision: string; note?: string }>('/__osham/admin/config/rollback', {
+        revision: snapshot.revision,
+        expectedRevision: config.meta.revision,
+      });
+      setMessage(data.note || `Rolled back admin state to revision ${data.revision}.`);
+      await loadConfig();
+    } catch (err) {
+      if (err instanceof ApiError && err.code === 'REVISION_CONFLICT') {
+        setError('Rollback blocked: another change landed first. Refresh to review the latest revision before trying again.');
+      } else {
+        setError(err instanceof Error ? err.message : 'Rollback failed');
+      }
+    } finally {
+      setBusy(null);
+    }
+  }
+
   function addNamespace() {
     const name = window.prompt('Namespace name');
     if (!name || !config || config.namespaces[name]) return;
@@ -449,6 +490,33 @@ export function ConfigPage() {
               <p>Last loaded: {config.meta.lastLoadedAt}</p>
               <p>Last applied: {config.meta.lastAppliedAt || 'Not yet applied'}</p>
               <p>Draft state: {hasUnsavedChanges ? 'dirty' : 'clean'}</p>
+            </Card>
+            <Card title="Revision History">
+              {history.length ? (
+                <div className="stack-list">
+                  {history.slice(0, 8).map(snapshot => {
+                    const isCurrent = snapshot.revision === config.meta.revision;
+                    const rollbackBusy = busy === `rollback:${snapshot.revision}`;
+                    return (
+                      <div key={`${snapshot.reason}-${snapshot.revision}-${snapshot.createdAt}`} className="code-block">
+                        <strong>{snapshot.revision}</strong>
+                        <div>{snapshot.reason === 'rollback' ? 'Rollback snapshot' : 'Saved snapshot'}</div>
+                        <div>{snapshot.createdAt}</div>
+                        <div>{isCurrent ? 'Current live revision' : 'Available for rollback'}</div>
+                        <button
+                          className="button"
+                          onClick={() => runRollback(snapshot)}
+                          disabled={isCurrent || busy !== null || hasUnsavedChanges}
+                        >
+                          {rollbackBusy ? 'Rolling back…' : isCurrent ? 'Current Revision' : 'Roll Back to This Revision'}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p>No saved snapshots yet.</p>
+              )}
             </Card>
             <Card title="Global Settings">
               <div className="form-grid compact-grid">

@@ -8,6 +8,7 @@ import { dump } from 'js-yaml';
 import { Cache } from '../services/cache.service';
 import { Metrics } from '../services/metrics.service';
 import { appendAdminAuditEvent, getAdminAuditEvents } from '../admin.audit';
+import { listAdminConfigSnapshots, persistAdminConfigSnapshot, readAdminConfigSnapshot } from '../admin.history';
 
 const ADMIN_BASE = '/__osham/admin';
 
@@ -247,6 +248,7 @@ export async function AdminConfig(ctx: IContext, next: Koa.Next): Promise<void> 
       writeFileSync(tempPath, yamlContent, 'utf-8');
       renameSync(tempPath, configPath);
       const revision = computeRevision(yamlContent);
+      persistAdminConfigSnapshot({ revision, content: yamlContent, reason: 'save' });
 
       appendAdminAuditEvent({
         time: new Date().toISOString(),
@@ -366,6 +368,128 @@ export async function AdminConfig(ctx: IContext, next: Koa.Next): Promise<void> 
         error: {
           code: 'APPLY_FAILED',
           message: err instanceof Error ? err.message : 'Failed to reload config',
+        },
+      });
+    }
+    return;
+  }
+
+  if (ctx.method === 'GET' && subPath === '/config/history') {
+    jsonResponse(ctx, 200, {
+      ok: true,
+      data: listAdminConfigSnapshots().map(snapshot => ({
+        revision: snapshot.revision,
+        createdAt: snapshot.createdAt,
+        reason: snapshot.reason,
+      })),
+    });
+    return;
+  }
+
+  if (ctx.method === 'POST' && subPath === '/config/rollback') {
+    let body: unknown;
+    try {
+      body = await readBody(ctx);
+    } catch {
+      jsonResponse(ctx, 400, { ok: false, error: { code: 'ROLLBACK_FAILED', message: 'Invalid JSON body' } });
+      return;
+    }
+
+    const b = body as { revision?: string; expectedRevision?: string };
+    if (!b.revision) {
+      jsonResponse(ctx, 400, {
+        ok: false,
+        error: { code: 'ROLLBACK_FAILED', message: 'Provide the snapshot revision to roll back to' },
+      });
+      return;
+    }
+
+    const state = getAdminState();
+    if (b.expectedRevision !== undefined && state && b.expectedRevision !== state.meta.revision) {
+      appendAdminAuditEvent({
+        time: new Date().toISOString(),
+        action: 'config.rollback',
+        actor: 'admin',
+        result: 'failure',
+        details: {
+          message: 'expectedRevision does not match current revision',
+          expectedRevision: b.expectedRevision,
+          currentRevision: state.meta.revision,
+          targetRevision: b.revision,
+        },
+      });
+
+      jsonResponse(ctx, 409, {
+        ok: false,
+        error: { code: 'REVISION_CONFLICT', message: 'expectedRevision does not match current revision' },
+      });
+      return;
+    }
+
+    try {
+      const snapshot = readAdminConfigSnapshot(b.revision);
+      const configPath = join(process.cwd(), 'cache-config.yml');
+      const tempPath = configPath + '.tmp';
+      writeFileSync(tempPath, snapshot.content, 'utf-8');
+      renameSync(tempPath, configPath);
+
+      const newConfig = getCacheConfig();
+      const now = new Date().toISOString();
+      const meta: AdminMeta = {
+        source: 'cache-config.yml',
+        lastLoadedAt: now,
+        lastAppliedAt: now,
+        revision: snapshot.revision,
+      };
+      setAdminState(newConfig, meta);
+      persistAdminConfigSnapshot({ revision: snapshot.revision, content: snapshot.content, reason: 'rollback' });
+
+      appendAdminAuditEvent({
+        time: now,
+        action: 'config.rollback',
+        actor: 'admin',
+        result: 'success',
+        details: {
+          revision: snapshot.revision,
+          rolledBackFromRevision: state?.meta.revision || null,
+        },
+      });
+
+      jsonResponse(ctx, 200, {
+        ok: true,
+        data: {
+          applied: true,
+          revision: snapshot.revision,
+          summary: {
+            namespaceCount: Object.keys(newConfig.namespaces).length,
+            features: {
+              health: newConfig.globalConfig.health,
+              metrics: newConfig.globalConfig.metrics,
+              purge: newConfig.globalConfig.purge,
+              xResponseTime: newConfig.globalConfig.xResponseTime,
+            },
+          },
+          note:
+            'Rolled back cache-config.yml to the selected snapshot and applied it to the running admin/runtime middleware chain.',
+        },
+      });
+    } catch (err) {
+      appendAdminAuditEvent({
+        time: new Date().toISOString(),
+        action: 'config.rollback',
+        actor: 'admin',
+        result: 'failure',
+        details: {
+          targetRevision: b.revision,
+          message: err instanceof Error ? err.message : 'Failed to roll back config',
+        },
+      });
+
+      jsonResponse(ctx, 500, {
+        ok: false,
+        error: {
+          code: 'ROLLBACK_FAILED',
+          message: err instanceof Error ? err.message : 'Failed to roll back config',
         },
       });
     }

@@ -70,6 +70,8 @@ admin-ui/vite.config.d.ts
 admin-ui/tsconfig.tsbuildinfo
 
 cache-config.yml
+.osham-admin-history/
+.osham-admin-audit.jsonl
 
 .vscode
 .temp

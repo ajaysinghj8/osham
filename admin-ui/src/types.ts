@@ -125,3 +125,9 @@ export interface AdminConfigView {
     revision: string;
   };
 }
+
+export interface AdminConfigSnapshot {
+  revision: string;
+  createdAt: string;
+  reason: 'save' | 'rollback';
+}

@@ -1139,6 +1139,48 @@ describe('Admin API – Config Endpoints', function () {
     assert.strictEqual(typeof dummyRest.latency.p95, 'number');
   });
 
+  it('GET /__osham/admin/config/history should return saved config snapshots', async function () {
+    const res = await client.get('/__osham/admin/config/history').set('x-osham-admin-secret', ADMIN_SECRET);
+    assert.strictEqual(res.status, 200);
+    const body = JSON.parse(res.text);
+    assert.strictEqual(body.ok, true);
+    assert.ok(Array.isArray(body.data));
+    assert.ok(body.data.length >= 1, 'should include at least one snapshot after config saves');
+    assert.ok(body.data.some(snapshot => snapshot.reason === 'save'));
+    assert.ok(body.data.every(snapshot => typeof snapshot.revision === 'string'));
+  });
+
+  it('POST /__osham/admin/config/rollback should apply a saved snapshot', async function () {
+    const currentConfigRes = await client.get('/__osham/admin/config').set('x-osham-admin-secret', ADMIN_SECRET);
+    const currentConfigBody = JSON.parse(currentConfigRes.text);
+    const currentRevision = currentConfigBody.data.meta.revision;
+
+    const historyRes = await client.get('/__osham/admin/config/history').set('x-osham-admin-secret', ADMIN_SECRET);
+    const historyBody = JSON.parse(historyRes.text);
+    const targetSnapshot = historyBody.data.find(
+      snapshot => snapshot.revision !== currentRevision && snapshot.reason === 'save',
+    );
+
+    assert.ok(targetSnapshot, 'should have an older save snapshot available for rollback');
+
+    const rollbackRes = await client
+      .post('/__osham/admin/config/rollback')
+      .set('x-osham-admin-secret', ADMIN_SECRET)
+      .send({ revision: targetSnapshot.revision, expectedRevision: currentRevision });
+    assert.strictEqual(rollbackRes.status, 200);
+    const rollbackBody = JSON.parse(rollbackRes.text);
+    assert.strictEqual(rollbackBody.ok, true);
+    assert.strictEqual(rollbackBody.data.applied, true);
+    assert.strictEqual(rollbackBody.data.revision, targetSnapshot.revision);
+
+    const liveRouteRes = await client.get('/live/employees');
+    assert.strictEqual(
+      liveRouteRes.status,
+      404,
+      'rollback should remove the liveReloaded namespace added by a later config',
+    );
+  });
+
   it('POST /__osham/admin/purge should return warnings for broad patterns', async function () {
     const res = await client
       .post('/__osham/admin/purge')
@@ -1178,6 +1220,8 @@ describe('Admin API – Config Endpoints', function () {
     assert.strictEqual(body.ok, true);
     assert.ok(Array.isArray(body.data));
     assert.ok(body.data.some(event => event.action === 'admin.purge'));
+    assert.ok(body.data.some(event => event.action === 'config.save'));
+    assert.ok(body.data.some(event => event.action === 'config.rollback'));
   });
 
   it('GET /__osham/admin/audit should survive process restarts via disk-backed storage', async function () {

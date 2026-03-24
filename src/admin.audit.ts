@@ -1,7 +1,7 @@
 import { appendFileSync, existsSync, readFileSync, unlinkSync } from 'fs';
 import { join } from 'path';
 
-export type AdminAuditAction = 'config.save' | 'config.reload' | 'admin.purge';
+export type AdminAuditAction = 'config.save' | 'config.reload' | 'config.rollback' | 'admin.purge';
 export type AdminAuditResult = 'success' | 'failure';
 
 export interface AdminAuditEvent {
