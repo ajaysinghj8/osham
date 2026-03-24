@@ -1,6 +1,12 @@
 import React from 'react';
 import { ApiError, apiGet, apiPost, apiPut } from '../api';
-import { AdminConfigSnapshot, AdminConfigView, CacheConfigView, NamespaceView, ValidationResult } from '../types';
+import {
+  AdminConfigSnapshot,
+  AdminConfigView,
+  CacheConfigView,
+  NamespaceView,
+  ValidationResult,
+} from '../types';
 import { Page } from '../ui/Page';
 import { Card } from '../ui/Card';
 
@@ -167,6 +173,22 @@ function cloneNamespaceView(namespace: NamespaceView): NamespaceView {
   };
 }
 
+function isAdminConfigView(value: unknown): value is AdminConfigView {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  return !!record.globalConfig && !!record.namespaces;
+}
+
+function downloadDraftConfig(config: AdminConfigView) {
+  const blob = new Blob([JSON.stringify(buildPayload(config), null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `osham-config-${config.meta.revision || 'draft'}.json`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
 export function ConfigPage() {
   const [config, setConfig] = React.useState<AdminConfigView | null>(null);
   const [history, setHistory] = React.useState<AdminConfigSnapshot[]>([]);
@@ -179,6 +201,7 @@ export function ConfigPage() {
   const [error, setError] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState<string | null>(null);
   const [lastSavedSnapshot, setLastSavedSnapshot] = React.useState<string>('');
+  const importInputRef = React.useRef<HTMLInputElement | null>(null);
 
   const loadConfig = React.useCallback(async () => {
     try {
@@ -275,6 +298,17 @@ export function ConfigPage() {
     }
   }, [allowText, config, denyText, rulesText, selectedNamespace]);
   const hasUnsavedChanges = !!config && currentPayload !== lastSavedSnapshot;
+
+  React.useEffect(() => {
+    function handleBeforeUnload(event: BeforeUnloadEvent) {
+      if (!hasUnsavedChanges) return;
+      event.preventDefault();
+      event.returnValue = '';
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasUnsavedChanges]);
 
   async function runValidate() {
     if (!config) return;
@@ -420,6 +454,56 @@ export function ConfigPage() {
     setSelectedNamespace(name);
   }
 
+  function resetDraft() {
+    if (!hasUnsavedChanges) return;
+    if (!window.confirm('Discard local draft changes and reload the live config from Osham?')) return;
+    setMessage('Discarded local draft changes and restored the live config.');
+    setValidation(null);
+    setError(null);
+    void loadConfig();
+  }
+
+  function exportDraft() {
+    if (!config) return;
+    const syncedConfig = syncTextAreas();
+    if (!syncedConfig) return;
+    downloadDraftConfig(syncedConfig);
+    setMessage('Exported the current draft config as JSON.');
+    setError(null);
+  }
+
+  async function importDraftFile(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text) as unknown;
+      if (!isAdminConfigView(parsed)) {
+        throw new Error('Imported file must be a JSON object with globalConfig and namespaces keys.');
+      }
+
+      const normalized = normalizeConfig({
+        ...parsed,
+        meta: config?.meta || {
+          source: 'imported draft',
+          lastLoadedAt: new Date().toISOString(),
+          lastAppliedAt: null,
+          revision: 'imported-draft',
+        },
+      });
+
+      setConfig(normalized);
+      setSelectedNamespace(current => (current && normalized.namespaces[current] ? current : Object.keys(normalized.namespaces)[0] || ''));
+      setValidation(null);
+      setError(null);
+      setMessage(`Imported draft config from ${file.name}. Validate before saving.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to import config file');
+    }
+  }
+
   function cloneNamespace() {
     if (!config || !namespace || !selectedNamespace) return;
     const name = window.prompt('Clone namespace as', `${selectedNamespace}-copy`);
@@ -466,6 +550,24 @@ export function ConfigPage() {
         <button className="button" onClick={runReload} disabled={!config || busy !== null}>
           {busy === 'reload' ? 'Reloading…' : 'Reload Admin State'}
         </button>
+        <button className="button" onClick={resetDraft} disabled={!hasUnsavedChanges || busy !== null}>
+          Reset Draft
+        </button>
+        <button className="button" onClick={exportDraft} disabled={!config || busy !== null}>
+          Export Draft
+        </button>
+        <button className="button" onClick={() => importInputRef.current?.click()} disabled={busy !== null}>
+          Import Draft
+        </button>
+        <input
+          ref={importInputRef}
+          type="file"
+          accept="application/json"
+          style={{ display: 'none' }}
+          onChange={event => {
+            void importDraftFile(event);
+          }}
+        />
         <button className="button" onClick={addNamespace} disabled={!config || busy !== null}>
           Add Namespace
         </button>
