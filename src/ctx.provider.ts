@@ -79,11 +79,12 @@ export class Context implements IContext {
     return socket.writable;
   }
   set(field: string, val: string): Context {
-    // @todo if header not send
-    try {
-      this.res.setHeader(field, val);
-    } catch (e) {
-      logger('Error set headers', field, val);
+    if (!this.res.headersSent) {
+      try {
+        this.res.setHeader(field, val);
+      } catch (e) {
+        logger('Error set headers', field, val);
+      }
     }
     return this;
   }

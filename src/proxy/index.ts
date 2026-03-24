@@ -177,9 +177,6 @@ function pipes(ctx: IContext, osham_headers: Record<string, string> = {}) {
   ctx.responseHeaders = writeHeaders(headers, ctx);
   writeHeaders(osham_headers, ctx);
   ctx.body = message || response;
-  /** if not res.headersSent */
-  /** @TODO:: ctx.setHeaders */
-  /** if not res.finished */
   return this;
 }
 
