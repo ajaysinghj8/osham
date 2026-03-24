@@ -1,4 +1,5 @@
 import React from 'react';
+import { dump } from 'js-yaml';
 import { ApiError, apiGet, apiPost, apiPut } from '../api';
 import {
   AdminConfigSnapshot,
@@ -200,6 +201,7 @@ export function ConfigPage() {
   const [message, setMessage] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState<string | null>(null);
+  const [previewFormat, setPreviewFormat] = React.useState<'yaml' | 'json'>('yaml');
   const [lastSavedSnapshot, setLastSavedSnapshot] = React.useState<string>('');
   const importInputRef = React.useRef<HTMLInputElement | null>(null);
 
@@ -289,14 +291,28 @@ export function ConfigPage() {
     }
   }
 
-  const currentPayload = React.useMemo(() => {
-    if (!config) return '';
+  const previewState = React.useMemo(() => {
+    if (!config) return null;
+
     try {
-      return JSON.stringify(buildPayload(buildSyncedConfigSnapshot(config)));
-    } catch {
-      return JSON.stringify(buildPayload(config));
+      const syncedConfig = buildSyncedConfigSnapshot(config);
+      const payload = buildPayload(syncedConfig);
+      return {
+        rawJson: JSON.stringify(payload, null, 2),
+        rawYaml: dump(payload, { noRefs: true, lineWidth: 120 }),
+        error: null as string | null,
+      };
+    } catch (err) {
+      const payload = buildPayload(config);
+      return {
+        rawJson: JSON.stringify(payload, null, 2),
+        rawYaml: dump(payload, { noRefs: true, lineWidth: 120 }),
+        error: err instanceof Error ? err.message : 'Rules JSON is invalid',
+      };
     }
   }, [allowText, config, denyText, rulesText, selectedNamespace]);
+
+  const currentPayload = previewState?.rawJson || '';
   const hasUnsavedChanges = !!config && currentPayload !== lastSavedSnapshot;
 
   React.useEffect(() => {
@@ -535,6 +551,19 @@ export function ConfigPage() {
     setMessage(`Removed namespace ${selectedNamespace} from the draft. Save to persist the change.`);
   }
 
+  async function copyPreviewToClipboard() {
+    if (!previewState) return;
+
+    try {
+      const text = previewFormat === 'yaml' ? previewState.rawYaml : previewState.rawJson;
+      await navigator.clipboard.writeText(text);
+      setMessage(`Copied ${previewFormat.toUpperCase()} preview to the clipboard.`);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : `Failed to copy ${previewFormat.toUpperCase()} preview`);
+    }
+  }
+
   return (
     <Page title="Config" subtitle="Edit global settings and namespace config, then validate/save/reload against the live admin API.">
       <div className="toolbar">
@@ -753,6 +782,30 @@ export function ConfigPage() {
               </Card>
             ) : null}
           </div>
+
+          <Card title="Advanced Preview">
+            <div className="toolbar">
+              <button className="button" onClick={() => setPreviewFormat('yaml')} disabled={previewFormat === 'yaml'}>
+                YAML
+              </button>
+              <button className="button" onClick={() => setPreviewFormat('json')} disabled={previewFormat === 'json'}>
+                JSON
+              </button>
+              <button className="button" onClick={() => void copyPreviewToClipboard()} disabled={!previewState}>
+                Copy {previewFormat.toUpperCase()}
+              </button>
+            </div>
+            <p>
+              Read-only preview of the current draft payload. Useful for reviewing structured changes before saving or exporting.
+            </p>
+            {previewState?.error ? <div className="code-block">Preview synced with the last valid draft. Fix the editor issue to update it live: {previewState.error}</div> : null}
+            <textarea
+              className="textarea"
+              rows={18}
+              readOnly
+              value={previewFormat === 'yaml' ? previewState?.rawYaml || '' : previewState?.rawJson || ''}
+            />
+          </Card>
 
           {validation ? (
             <Card title="Validation Results">
