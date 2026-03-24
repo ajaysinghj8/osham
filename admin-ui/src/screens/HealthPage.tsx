@@ -4,12 +4,21 @@ import { Card } from '../ui/Card';
 import { apiGet } from '../api';
 import { HealthResponse, StartupSummaryResponse } from '../types';
 
+function formatTimestamp(value?: string | null): string {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString();
+}
+
 export function HealthPage() {
   const [health, setHealth] = React.useState<HealthResponse | null>(null);
   const [startup, setStartup] = React.useState<StartupSummaryResponse | null>(null);
   const [error, setError] = React.useState<string | null>(null);
+  const [busy, setBusy] = React.useState(false);
 
   const load = React.useCallback(() => {
+    setBusy(true);
     Promise.all([
       apiGet<HealthResponse>('/__osham/admin/health'),
       apiGet<StartupSummaryResponse>('/__osham/admin/startup-summary'),
@@ -19,7 +28,8 @@ export function HealthPage() {
         setStartup(startupData);
         setError(null);
       })
-      .catch(err => setError(err instanceof Error ? err.message : 'Failed to load health data'));
+      .catch(err => setError(err instanceof Error ? err.message : 'Failed to load health data'))
+      .finally(() => setBusy(false));
   }, []);
 
   React.useEffect(() => {
@@ -29,8 +39,8 @@ export function HealthPage() {
   return (
     <Page title="Health" subtitle="Operational health, startup features, and namespace visibility for the running server.">
       <div className="toolbar">
-        <button className="button" onClick={load}>
-          Refresh Health
+        <button className="button" onClick={load} disabled={busy}>
+          {busy ? 'Refreshing…' : 'Refresh Health'}
         </button>
       </div>
 
@@ -48,11 +58,13 @@ export function HealthPage() {
         <Card title="Config State">
           <p>Loaded: {String(health?.config.loaded ?? false)}</p>
           <p>Revision: {health?.config.revision || '—'}</p>
-          <p>Applied: {health?.config.lastAppliedAt || '—'}</p>
+          <p>Source: {health?.config.source || '—'}</p>
+          <p>Applied: {formatTimestamp(health?.config.lastAppliedAt)}</p>
         </Card>
         <Card title="Startup Summary">
           <p>Version: {startup?.version || '—'}</p>
           <p>Namespaces: {startup?.namespaceCount ?? '—'}</p>
+          <p>Warnings: {startup?.warnings.length ?? 0}</p>
         </Card>
       </div>
 

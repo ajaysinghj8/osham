@@ -211,6 +211,10 @@ label {
   margin-top: 10px;
 }
 
+.compact-pill-list {
+  margin-top: 0;
+}
+
 .status-pill {
   display: inline-flex;
   align-items: center;

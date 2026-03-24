@@ -23,8 +23,10 @@ export function MetricsPage() {
   const [summary, setSummary] = React.useState<MetricsSummary | null>(null);
   const [rows, setRows] = React.useState<NamespaceMetricsSummary[]>([]);
   const [error, setError] = React.useState<string | null>(null);
+  const [busy, setBusy] = React.useState(false);
 
   const load = React.useCallback(() => {
+    setBusy(true);
     Promise.all([
       apiGet<MetricsSummary>('/__osham/admin/metrics/summary'),
       apiGet<NamespaceMetricsSummary[]>('/__osham/admin/metrics/namespaces'),
@@ -34,18 +36,24 @@ export function MetricsPage() {
         setRows(namespaceData);
         setError(null);
       })
-      .catch(err => setError(err instanceof Error ? err.message : 'Failed to load metrics'));
+      .catch(err => setError(err instanceof Error ? err.message : 'Failed to load metrics'))
+      .finally(() => setBusy(false));
   }, []);
 
   React.useEffect(() => {
     load();
   }, [load]);
 
+  const activeRows = rows.filter(row => row.requests > 0);
+  const hottestNamespace = [...activeRows].sort((left, right) => right.requests - left.requests)[0] || null;
+  const coldestCacheNamespace = [...activeRows].sort((left, right) => left.hitRatio - right.hitRatio)[0] || null;
+  const largestCacheNamespace = [...rows].sort((left, right) => right.cacheSizeBytes - left.cacheSizeBytes)[0] || null;
+
   return (
     <Page title="Metrics" subtitle="Aggregate and per-namespace cache performance for the running Osham instance.">
       <div className="toolbar">
-        <button className="button" onClick={load}>
-          Refresh Metrics
+        <button className="button" onClick={load} disabled={busy}>
+          {busy ? 'Refreshing…' : 'Refresh Metrics'}
         </button>
       </div>
 
@@ -65,6 +73,26 @@ export function MetricsPage() {
         </Card>
         <Card title="Estimated Cache Size">
           <p>{summary ? formatBytes(summary.cacheSizeBytes) : '—'}</p>
+        </Card>
+      </div>
+
+      <div className="card-grid">
+        <Card title="Hottest Namespace">
+          <p>{hottestNamespace ? hottestNamespace.namespace : 'No traffic yet'}</p>
+          <p>Requests: {hottestNamespace?.requests ?? '—'}</p>
+          <p>Latency p95: {hottestNamespace ? formatSeconds(hottestNamespace.latency.p95) : '—'}</p>
+        </Card>
+        <Card title="Weakest Cache Performance">
+          <p>{coldestCacheNamespace ? coldestCacheNamespace.namespace : 'No traffic yet'}</p>
+          <p>Hit ratio: {coldestCacheNamespace ? formatPercent(coldestCacheNamespace.hitRatio) : '—'}</p>
+          <p>
+            Hits / Misses: {coldestCacheNamespace ? `${coldestCacheNamespace.cacheHits} / ${coldestCacheNamespace.cacheMisses}` : '—'}
+          </p>
+        </Card>
+        <Card title="Largest Namespace Cache">
+          <p>{largestCacheNamespace ? largestCacheNamespace.namespace : 'No cached responses yet'}</p>
+          <p>Cache size: {largestCacheNamespace ? formatBytes(largestCacheNamespace.cacheSizeBytes) : '—'}</p>
+          <p>Pooled requests: {largestCacheNamespace?.pooledRequests ?? '—'}</p>
         </Card>
       </div>
 
