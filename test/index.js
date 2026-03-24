@@ -834,10 +834,12 @@ describe('Admin API – Config Endpoints', function () {
 
   let prevSecret;
   let prevInsecure;
+  let prevAdminMaxBodyBytes;
 
   before(function () {
     prevSecret = process.env.OSHAM_ADMIN_SECRET;
     prevInsecure = process.env.OSHAM_ADMIN_ALLOW_INSECURE_LOCAL;
+    prevAdminMaxBodyBytes = process.env.OSHAM_ADMIN_MAX_BODY_BYTES;
     process.env.OSHAM_ADMIN_SECRET = ADMIN_SECRET;
     delete process.env.OSHAM_ADMIN_ALLOW_INSECURE_LOCAL;
   });
@@ -852,6 +854,11 @@ describe('Admin API – Config Endpoints', function () {
       delete process.env.OSHAM_ADMIN_ALLOW_INSECURE_LOCAL;
     } else {
       process.env.OSHAM_ADMIN_ALLOW_INSECURE_LOCAL = prevInsecure;
+    }
+    if (prevAdminMaxBodyBytes === undefined) {
+      delete process.env.OSHAM_ADMIN_MAX_BODY_BYTES;
+    } else {
+      process.env.OSHAM_ADMIN_MAX_BODY_BYTES = prevAdminMaxBodyBytes;
     }
   });
 
@@ -898,6 +905,37 @@ describe('Admin API – Config Endpoints', function () {
     assert.ok(Array.isArray(body.data.errors), 'errors should be an array');
     assert.ok(Array.isArray(body.data.warnings), 'warnings should be an array');
     assert.strictEqual(body.data.errors.length, 0);
+  });
+
+  it('POST /__osham/admin/config/validate should reject oversized request bodies', async function () {
+    process.env.OSHAM_ADMIN_MAX_BODY_BYTES = '128';
+
+    const payload = {
+      config: {
+        globalConfig: { version: '1', health: true },
+        namespaces: {
+          api: {
+            expose: '/api/*',
+            target: 'http://localhost:9999',
+            allow: new Array(40).fill('/employees/**'),
+          },
+        },
+      },
+    };
+
+    const res = await client
+      .post('/__osham/admin/config/validate')
+      .set('x-osham-admin-secret', ADMIN_SECRET)
+      .set('content-type', 'application/json')
+      .send(JSON.stringify(payload));
+
+    assert.strictEqual(res.status, 413);
+    const body = JSON.parse(res.text);
+    assert.strictEqual(body.ok, false);
+    assert.strictEqual(body.error.code, 'REQUEST_BODY_TOO_LARGE');
+    assert.ok(body.error.message.includes('128'));
+
+    delete process.env.OSHAM_ADMIN_MAX_BODY_BYTES;
   });
 
   it('POST /__osham/admin/config/validate with missing version should return valid:false', async function () {

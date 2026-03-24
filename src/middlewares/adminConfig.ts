@@ -103,20 +103,89 @@ function fullConfigToRaw(config: IFullConfig): Record<string, unknown> {
   return raw;
 }
 
+class RequestBodyError extends Error {
+  code: 'INVALID_JSON_BODY' | 'REQUEST_BODY_TOO_LARGE';
+
+  constructor(message: string, code: 'INVALID_JSON_BODY' | 'REQUEST_BODY_TOO_LARGE') {
+    super(message);
+    this.name = 'RequestBodyError';
+    this.code = code;
+  }
+}
+
+function getAdminMaxBodyBytes(): number {
+  const parsed = Number(process.env.OSHAM_ADMIN_MAX_BODY_BYTES);
+  if (Number.isFinite(parsed) && parsed > 0) {
+    return Math.floor(parsed);
+  }
+  return 1024 * 1024;
+}
+
 /** Reads the full request body and parses it as JSON. */
 async function readBody(ctx: IContext): Promise<unknown> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
-    ctx.req.on('data', (chunk: Buffer) => chunks.push(chunk));
-    ctx.req.on('end', () => {
+    let totalBytes = 0;
+    const maxBodyBytes = getAdminMaxBodyBytes();
+
+    function cleanup() {
+      ctx.req.removeListener('data', onData);
+      ctx.req.removeListener('end', onEnd);
+      ctx.req.removeListener('error', onError);
+    }
+
+    function onError(err: Error) {
+      cleanup();
+      reject(err);
+    }
+
+    function onData(chunk: Buffer) {
+      totalBytes += chunk.length;
+      if (totalBytes > maxBodyBytes) {
+        cleanup();
+        ctx.req.pause();
+        reject(
+          new RequestBodyError(`Request body exceeds admin limit of ${maxBodyBytes} bytes`, 'REQUEST_BODY_TOO_LARGE'),
+        );
+        return;
+      }
+      chunks.push(chunk);
+    }
+
+    function onEnd() {
+      cleanup();
       try {
         const text = Buffer.concat(chunks).toString('utf-8');
         resolve(text ? JSON.parse(text) : {});
       } catch {
-        reject(new Error('Invalid JSON body'));
+        reject(new RequestBodyError('Invalid JSON body', 'INVALID_JSON_BODY'));
       }
+    }
+
+    ctx.req.on('data', onData);
+    ctx.req.on('end', onEnd);
+    ctx.req.on('error', onError);
+  });
+}
+
+function respondBodyReadError(ctx: IContext, err: unknown, fallbackCode: string, fallbackMessage: string): void {
+  if (err instanceof RequestBodyError && err.code === 'REQUEST_BODY_TOO_LARGE') {
+    jsonResponse(ctx, 413, {
+      ok: false,
+      error: {
+        code: 'REQUEST_BODY_TOO_LARGE',
+        message: err.message,
+      },
     });
-    ctx.req.on('error', reject);
+    return;
+  }
+
+  jsonResponse(ctx, 400, {
+    ok: false,
+    error: {
+      code: fallbackCode,
+      message: err instanceof Error ? err.message : fallbackMessage,
+    },
   });
 }
 
@@ -194,8 +263,8 @@ export async function AdminConfig(ctx: IContext, next: Koa.Next): Promise<void> 
     let body: unknown;
     try {
       body = await readBody(ctx);
-    } catch {
-      jsonResponse(ctx, 400, { ok: false, error: { code: 'VALIDATION_FAILED', message: 'Invalid JSON body' } });
+    } catch (err) {
+      respondBodyReadError(ctx, err, 'VALIDATION_FAILED', 'Invalid JSON body');
       return;
     }
 
@@ -211,8 +280,8 @@ export async function AdminConfig(ctx: IContext, next: Koa.Next): Promise<void> 
     let body: unknown;
     try {
       body = await readBody(ctx);
-    } catch {
-      jsonResponse(ctx, 400, { ok: false, error: { code: 'SAVE_FAILED', message: 'Invalid JSON body' } });
+    } catch (err) {
+      respondBodyReadError(ctx, err, 'SAVE_FAILED', 'Invalid JSON body');
       return;
     }
 
@@ -286,8 +355,8 @@ export async function AdminConfig(ctx: IContext, next: Koa.Next): Promise<void> 
     let body: unknown;
     try {
       body = await readBody(ctx);
-    } catch {
-      jsonResponse(ctx, 400, { ok: false, error: { code: 'APPLY_FAILED', message: 'Invalid JSON body' } });
+    } catch (err) {
+      respondBodyReadError(ctx, err, 'APPLY_FAILED', 'Invalid JSON body');
       return;
     }
 
@@ -390,8 +459,8 @@ export async function AdminConfig(ctx: IContext, next: Koa.Next): Promise<void> 
     let body: unknown;
     try {
       body = await readBody(ctx);
-    } catch {
-      jsonResponse(ctx, 400, { ok: false, error: { code: 'ROLLBACK_FAILED', message: 'Invalid JSON body' } });
+    } catch (err) {
+      respondBodyReadError(ctx, err, 'ROLLBACK_FAILED', 'Invalid JSON body');
       return;
     }
 
@@ -561,8 +630,8 @@ export async function AdminConfig(ctx: IContext, next: Koa.Next): Promise<void> 
     let body: unknown;
     try {
       body = await readBody(ctx);
-    } catch {
-      jsonResponse(ctx, 400, { ok: false, error: { code: 'PURGE_DENIED', message: 'Invalid JSON body' } });
+    } catch (err) {
+      respondBodyReadError(ctx, err, 'PURGE_DENIED', 'Invalid JSON body');
       return;
     }
 

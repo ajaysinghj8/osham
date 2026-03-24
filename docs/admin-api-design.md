@@ -553,6 +553,7 @@ Recommended codes:
 - `SAVE_FAILED`
 - `APPLY_FAILED`
 - `REVISION_CONFLICT`
+- `REQUEST_BODY_TOO_LARGE`
 - `PURGE_DENIED`
 - `NOT_FOUND`
 - `INTERNAL_ERROR`
@@ -604,6 +605,23 @@ This separation is safer for UI workflows and allows future review/diff screens.
 2. `POST /config/validate`
 3. `PUT /config`
 4. `POST /config/reload`
+5. `GET /health`
+6. `GET /startup-summary`
+7. `GET /metrics/summary`
+8. `GET /metrics/namespaces`
+9. `POST /purge`
+10. `GET /audit`
+
+---
+
+## Best Next Step
+
+Use this doc to implement the first backend milestone:
+- admin route scaffold
+- auth middleware
+- config read/validate/save/reload endpoints
+- tests for those endpoints
+g/reload`
 5. `GET /health`
 6. `GET /startup-summary`
 7. `GET /metrics/summary`
