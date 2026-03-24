@@ -69,8 +69,7 @@ export function createNameSpaceHandler(
     if (ctx.method !== 'GET' || !cacheConfig) {
       logger(`${ctx.method} ${pathToCall} ${cacheConfig ? '(No cache config)' : ''}`);
       const proxyCtxN = await proxyRequest(proxyPath, ctx.method, ctx.headers);
-      const responsePromise = proxyCtxN.toPromise();
-      const response = await responsePromise;
+      const response = await proxyCtxN.toPromise().catch(err => err);
       finish(response.statusCode);
       return respondWithCtx(ctx, OshamHeaders.notConfigured(ctx.method))(response as never);
     }
@@ -91,7 +90,7 @@ export function createNameSpaceHandler(
       const proxyCtxM = await proxyRequest(proxyPath, ctx.method, ctx.headers);
       const responsePromise = proxyCtxM.toPromise();
       responsePromise.then(res => Cache.put(cacheKey, res.toJSON(), +cacheConfig.expires)).catch(() => ({}));
-      const response = await responsePromise;
+      const response = await responsePromise.catch(err => err);
       finish(response.statusCode);
       return respondWithCtx(ctx, oshamHeaders.toRecords())(response as never);
     }
@@ -123,7 +122,7 @@ export function createNameSpaceHandler(
         const response = errorToData(error);
         RequestPool.errorAndPublish(cacheKey, response);
       });
-    const response = await responsePromise;
+    const response = await responsePromise.catch(err => err);
     finish(response.statusCode);
     return respondWithCtx(ctx, oshamHeaders.toRecords())(response as never);
   };

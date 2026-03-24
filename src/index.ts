@@ -112,7 +112,7 @@ Server.on('request', async (req: IncomingMessage, res: ServerResponse) => {
   res.statusCode = 404;
 
   const handleError = (err: unknown) => {
-    const message = err instanceof Error ? err.message : String(err);
+    const message = err instanceof Error ? err.message : typeof err === 'object' ? JSON.stringify(err) : String(err);
     logger(`Unhandled request error for ${req.method} ${req.url}: ${message}`);
     if (!res.headersSent) {
       res.statusCode = 500;
