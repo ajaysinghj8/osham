@@ -1,5 +1,5 @@
 import React from 'react';
-import { dump } from 'js-yaml';
+import { dump, load } from 'js-yaml';
 import { ApiError, apiGet, apiPost, apiPut } from '../api';
 import {
   AdminConfigSnapshot,
@@ -180,14 +180,65 @@ function isAdminConfigView(value: unknown): value is AdminConfigView {
   return !!record.globalConfig && !!record.namespaces;
 }
 
-function downloadDraftConfig(config: AdminConfigView) {
-  const blob = new Blob([JSON.stringify(buildPayload(config), null, 2)], { type: 'application/json' });
+function downloadDraftConfig(config: AdminConfigView, format: 'json' | 'yaml') {
+  const payload = buildPayload(config);
+  const content =
+    format === 'yaml'
+      ? dump(payload, { noRefs: true, lineWidth: 120 })
+      : JSON.stringify(payload, null, 2);
+  const blob = new Blob([content], {
+    type: format === 'yaml' ? 'application/x-yaml' : 'application/json',
+  });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;
-  anchor.download = `osham-config-${config.meta.revision || 'draft'}.json`;
+  anchor.download = `osham-config-${config.meta.revision || 'draft'}.${format === 'yaml' ? 'yml' : 'json'}`;
   anchor.click();
   URL.revokeObjectURL(url);
+}
+
+function toDraftAdminConfigView(
+  parsed: unknown,
+  currentMeta: AdminConfigView['meta'] | undefined,
+): AdminConfigView {
+  if (isAdminConfigView(parsed)) {
+    return normalizeConfig({
+      ...parsed,
+      meta:
+        parsed.meta ||
+        currentMeta || {
+          source: 'imported draft',
+          lastLoadedAt: new Date().toISOString(),
+          lastAppliedAt: null,
+          revision: 'imported-draft',
+        },
+    });
+  }
+
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('Imported file must be a JSON or YAML object.');
+  }
+
+  const flatConfig = parsed as Record<string, unknown>;
+  const { version, xResponseTime, health, purge, metrics, changeOrigin, ...namespaces } = flatConfig;
+  return normalizeConfig({
+    globalConfig: {
+      version: typeof version === 'string' ? version : '',
+      xResponseTime: xResponseTime === true,
+      health: health === true,
+      purge: purge === true,
+      metrics: metrics === true,
+      changeOrigin: changeOrigin === true,
+    },
+    namespaces: namespaces as AdminConfigView['namespaces'],
+    meta:
+      currentMeta || {
+        source: 'imported draft',
+        lastLoadedAt: new Date().toISOString(),
+        lastAppliedAt: null,
+        revision: 'imported-draft',
+      },
+  });
 }
 
 function getIssuesForPaths(validation: ValidationResult | null, paths: string[]): ValidationResult['errors'] {
@@ -513,8 +564,8 @@ export function ConfigPage() {
     if (!config) return;
     const syncedConfig = syncTextAreas();
     if (!syncedConfig) return;
-    downloadDraftConfig(syncedConfig);
-    setMessage('Exported the current draft config as JSON.');
+    downloadDraftConfig(syncedConfig, previewFormat);
+    setMessage(`Exported the current draft config as ${previewFormat.toUpperCase()}.`);
     setError(null);
   }
 
@@ -525,26 +576,15 @@ export function ConfigPage() {
 
     try {
       const text = await file.text();
-      const parsed = JSON.parse(text) as unknown;
-      if (!isAdminConfigView(parsed)) {
-        throw new Error('Imported file must be a JSON object with globalConfig and namespaces keys.');
-      }
-
-      const normalized = normalizeConfig({
-        ...parsed,
-        meta: config?.meta || {
-          source: 'imported draft',
-          lastLoadedAt: new Date().toISOString(),
-          lastAppliedAt: null,
-          revision: 'imported-draft',
-        },
-      });
+      const isYamlFile = /\.(ya?ml)$/i.test(file.name);
+      const parsed = (isYamlFile ? load(text) : JSON.parse(text)) as unknown;
+      const normalized = toDraftAdminConfigView(parsed, config?.meta);
 
       setConfig(normalized);
       setSelectedNamespace(current => (current && normalized.namespaces[current] ? current : Object.keys(normalized.namespaces)[0] || ''));
       setValidation(null);
       setError(null);
-      setMessage(`Imported draft config from ${file.name}. Validate before saving.`);
+      setMessage(`Imported ${isYamlFile ? 'YAML' : 'JSON'} draft config from ${file.name}. Validate before saving.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to import config file');
     }
@@ -621,7 +661,7 @@ export function ConfigPage() {
         <input
           ref={importInputRef}
           type="file"
-          accept="application/json"
+          accept="application/json,.json,application/x-yaml,.yaml,.yml,text/yaml,text/x-yaml"
           style={{ display: 'none' }}
           onChange={event => {
             void importDraftFile(event);
