@@ -9,23 +9,26 @@ import { AuditPage } from './screens/AuditPage';
 import { NotFoundPage } from './screens/NotFoundPage';
 import { Sidebar } from './ui/Sidebar';
 import { AdminSecretBar } from './ui/AdminSecretBar';
+import { AuthGate } from './ui/AuthGate';
 
-function Layout() {
+function AdminLayout() {
   return (
-    <div className="app-shell">
-      <Sidebar />
-      <main className="content-shell">
-        <AdminSecretBar />
-        <Outlet />
-      </main>
-    </div>
+    <AuthGate>
+      <div className="app-shell">
+        <Sidebar />
+        <main className="content-shell">
+          <AdminSecretBar />
+          <Outlet />
+        </main>
+      </div>
+    </AuthGate>
   );
 }
 
 export const router = createBrowserRouter([
   {
     path: '/',
-    element: <Layout />,
+    element: <AdminLayout />,
     children: [
       { index: true, element: <Navigate to="/admin/dashboard" replace /> },
       { path: '/admin/dashboard', element: <DashboardPage /> },

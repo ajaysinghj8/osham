@@ -60,6 +60,25 @@ body {
   padding: 28px;
 }
 
+.auth-gate-shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+}
+
+.auth-gate-card {
+  width: min(720px, 100%);
+  background: rgba(17, 24, 39, 0.92);
+  border: 1px solid #22304a;
+  border-radius: 18px;
+  padding: 24px;
+}
+
+.auth-gate-toolbar {
+  margin-top: 20px;
+}
+
 .admin-secret-card {
   margin-bottom: 20px;
 }

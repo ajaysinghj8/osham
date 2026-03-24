@@ -138,6 +138,30 @@ Scrape this endpoint from your Prometheus instance to track cache efficiency and
 
 - [Metrics](docs/metrics.md)
 
+## Admin UI
+
+Osham now includes a sidecar admin UI under `admin-ui/` for config editing, health/metrics visibility, purge tooling, audit review, config history, rollback, and draft import/export.
+
+### Run the admin UI locally
+
+Start Osham first so the admin API is reachable, then in another shell:
+
+```sh
+cd admin-ui
+npm install
+npm run build
+# or for local development
+npm run dev
+```
+
+By default the Vite dev server proxies `'/__osham/*'` requests to `http://127.0.0.1:26192`. If your Osham server listens elsewhere, override the proxy target:
+
+```sh
+OSHAM_ADMIN_API_TARGET=http://127.0.0.1:3001 npm run dev
+```
+
+The UI stores `x-osham-admin-secret` in `sessionStorage` only and will prompt again if the saved secret is rejected by the admin API.
+
 ## When to use Osham
 
 - Reduce backend load and TTFB for high-read API endpoints
