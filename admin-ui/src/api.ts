@@ -1,3 +1,6 @@
+export const ADMIN_SECRET_STORAGE_KEY = 'osham-admin-secret';
+export const ADMIN_SECRET_CHANGED_EVENT = 'osham-admin-secret-changed';
+
 export class ApiError extends Error {
   status: number;
   code?: string;
@@ -12,28 +15,65 @@ export class ApiError extends Error {
   }
 }
 
-async function readJsonResponse<T>(res: Response): Promise<T> {
-  const body = await res.json();
-  if (!res.ok || body.ok === false) {
-    throw new ApiError(body?.error?.message || `Request failed: ${res.status}`, {
-      status: res.status,
-      code: body?.error?.code,
-      details: body?.details,
-    });
-  }
-  return body.data as T;
+function emitAdminSecretChanged(): void {
+  window.dispatchEvent(new Event(ADMIN_SECRET_CHANGED_EVENT));
 }
 
-function getStoredAdminSecret(): string {
-  const sessionSecret = window.sessionStorage.getItem('osham-admin-secret') || '';
+export function getStoredAdminSecret(): string {
+  const sessionSecret = window.sessionStorage.getItem(ADMIN_SECRET_STORAGE_KEY) || '';
   if (sessionSecret) return sessionSecret;
 
-  const legacySecret = window.localStorage.getItem('osham-admin-secret') || '';
+  const legacySecret = window.localStorage.getItem(ADMIN_SECRET_STORAGE_KEY) || '';
   if (legacySecret) {
-    window.sessionStorage.setItem('osham-admin-secret', legacySecret);
-    window.localStorage.removeItem('osham-admin-secret');
+    window.sessionStorage.setItem(ADMIN_SECRET_STORAGE_KEY, legacySecret);
+    window.localStorage.removeItem(ADMIN_SECRET_STORAGE_KEY);
+    emitAdminSecretChanged();
   }
   return legacySecret;
+}
+
+export function saveAdminSecret(secret: string): void {
+  const trimmed = secret.trim();
+  if (trimmed) {
+    window.sessionStorage.setItem(ADMIN_SECRET_STORAGE_KEY, trimmed);
+  } else {
+    window.sessionStorage.removeItem(ADMIN_SECRET_STORAGE_KEY);
+  }
+  window.localStorage.removeItem(ADMIN_SECRET_STORAGE_KEY);
+  emitAdminSecretChanged();
+}
+
+export function clearAdminSecret(): void {
+  window.sessionStorage.removeItem(ADMIN_SECRET_STORAGE_KEY);
+  window.localStorage.removeItem(ADMIN_SECRET_STORAGE_KEY);
+  emitAdminSecretChanged();
+}
+
+async function readJsonResponse<T>(res: Response): Promise<T> {
+  let body: any = null;
+  const rawText = await res.text();
+  if (rawText) {
+    try {
+      body = JSON.parse(rawText);
+    } catch {
+      body = null;
+    }
+  }
+
+  if (!res.ok || body?.ok === false) {
+    const unauthorizedMessage = getStoredAdminSecret()
+      ? 'Admin API rejected the saved secret. Update or clear the x-osham-admin-secret and try again.'
+      : 'Admin API requires x-osham-admin-secret. Save the admin secret above and retry.';
+    throw new ApiError(
+      res.status === 401 ? unauthorizedMessage : body?.error?.message || rawText || `Request failed: ${res.status}`,
+      {
+        status: res.status,
+        code: body?.error?.code,
+        details: body?.details,
+      },
+    );
+  }
+  return body.data as T;
 }
 
 function getAdminHeaders(contentType?: string): HeadersInit {

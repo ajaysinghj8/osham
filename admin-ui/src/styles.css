@@ -60,6 +60,14 @@ body {
   padding: 28px;
 }
 
+.admin-secret-card {
+  margin-bottom: 20px;
+}
+
+.admin-secret-toolbar {
+  margin-bottom: 12px;
+}
+
 .toolbar {
   display: flex;
   gap: 12px;
@@ -84,6 +92,10 @@ body {
 
 .button {
   cursor: pointer;
+}
+
+.button-secondary {
+  background: transparent;
 }
 
 .table {
