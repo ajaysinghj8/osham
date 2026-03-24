@@ -100,14 +100,16 @@ export class Context implements IContext {
     if (statuses.empty[code]) {
       // strip headers
       this.body = null;
-      return res.end();
+      res.end();
+      return;
     }
 
     if ('HEAD' === this.method) {
       if (!res.headersSent) {
         // ctx.length = Buffer.byteLength(JSON.stringify(body));
       }
-      return res.end();
+      res.end();
+      return;
     }
 
     // status body
