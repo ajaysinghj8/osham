@@ -1,10 +1,13 @@
 import React from 'react';
 
 export function AdminSecretBar() {
-  const [value, setValue] = React.useState(() => window.localStorage.getItem('osham-admin-secret') || '');
+  const [value, setValue] = React.useState(
+    () => window.sessionStorage.getItem('osham-admin-secret') || window.localStorage.getItem('osham-admin-secret') || '',
+  );
 
   function save() {
-    window.localStorage.setItem('osham-admin-secret', value);
+    window.sessionStorage.setItem('osham-admin-secret', value);
+    window.localStorage.removeItem('osham-admin-secret');
   }
 
   return (

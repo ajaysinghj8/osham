@@ -85,7 +85,7 @@ export interface CacheConfigView {
 }
 
 export interface RuleView {
-  pattern: string;
+  pattern?: string;
   cache: CacheConfigView;
 }
 

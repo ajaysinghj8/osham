@@ -24,8 +24,20 @@ async function readJsonResponse<T>(res: Response): Promise<T> {
   return body.data as T;
 }
 
+function getStoredAdminSecret(): string {
+  const sessionSecret = window.sessionStorage.getItem('osham-admin-secret') || '';
+  if (sessionSecret) return sessionSecret;
+
+  const legacySecret = window.localStorage.getItem('osham-admin-secret') || '';
+  if (legacySecret) {
+    window.sessionStorage.setItem('osham-admin-secret', legacySecret);
+    window.localStorage.removeItem('osham-admin-secret');
+  }
+  return legacySecret;
+}
+
 function getAdminHeaders(contentType?: string): HeadersInit {
-  const secret = window.localStorage.getItem('osham-admin-secret') || '';
+  const secret = getStoredAdminSecret();
   return {
     ...(contentType ? { 'content-type': contentType } : {}),
     ...(secret ? { 'x-osham-admin-secret': secret } : {}),

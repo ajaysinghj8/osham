@@ -39,6 +39,26 @@ function toCacheView(cache: CacheSource): CacheConfigView {
   };
 }
 
+function toRuleViews(
+  rules:
+    | NamespaceView['rules']
+    | Record<string, { cache?: CacheSource }>
+    | undefined,
+): NamespaceView['rules'] {
+  if (!rules) return [];
+  if (Array.isArray(rules)) {
+    return rules.map(rule => ({
+      pattern: rule.pattern,
+      cache: toCacheView(rule.cache),
+    }));
+  }
+
+  return Object.entries(rules).map(([pattern, rule]) => ({
+    pattern,
+    cache: toCacheView(rule?.cache),
+  }));
+}
+
 function normalizeConfig(data: AdminConfigView): AdminConfigView {
   const namespaces = Object.fromEntries(
     Object.entries(data.namespaces || {}).map(([name, ns]) => [
@@ -53,10 +73,7 @@ function normalizeConfig(data: AdminConfigView): AdminConfigView {
         allow: ns.allow || [],
         deny: ns.deny || [],
         cache: toCacheView(ns.cache),
-        rules: (ns.rules || []).map(rule => ({
-          pattern: rule.pattern,
-          cache: toCacheView(rule.cache),
-        })),
+        rules: toRuleViews(ns.rules),
       },
     ]),
   );
@@ -93,9 +110,10 @@ function buildPayload(config: AdminConfigView) {
         built.cache = false;
       }
 
-      if (ns.rules.length) {
+      const validRules = ns.rules.filter(rule => rule.pattern && rule.pattern.trim());
+      if (validRules.length) {
         built.rules = Object.fromEntries(
-          ns.rules.map(rule => [
+          validRules.map(rule => [
             rule.pattern,
             {
               cache: rule.cache.enabled
