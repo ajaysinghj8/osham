@@ -39,7 +39,7 @@ SECURE=false
 TIMEOUT=7000
 ```
 
-See `cache-config.example.yml` for full options and examples. The server supports per-namespace rules, cache expiry, pooling, and query/header-based cache variation.
+The server supports per-namespace rules, cache expiry, pooling, and query/header-based cache variation. See the inline example below and the full config reference in the docs.
 
 ### Example `cache-config.yml`
 
@@ -185,11 +185,26 @@ The diagram below illustrates how Osham handles incoming HTTP GET requests:
 
 ![Osham Architecture](https://raw.githubusercontent.com/ajaysinghj8/osham/master/public/Arch.svg?sanitize=true&raw=true)
 
+## Troubleshooting
+
+Having problems? See the [Troubleshooting guide](docs/troubleshooting.md) for solutions to common issues including:
+
+- Server won't start (missing config, invalid YAML, HTTPS env vars)
+- Cache misses or incorrect TTL behaviour
+- 403 responses from allow/deny rules
+- Purge not working (auth, pattern format)
+- Metrics endpoint returning 404
+- Admin UI auth and CORS issues
+
 ## Contributing
 
-PRs and issues welcome. Run tests with:
+PRs and issues welcome. See the [Contributor Setup guide](docs/contributor-setup.md) for full local setup instructions, test guidance, and PR guidelines.
+
+Quick start:
 
 ```sh
+npm install
+npm run build
 npm test
 ```
 
