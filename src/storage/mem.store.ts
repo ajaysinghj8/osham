@@ -6,40 +6,31 @@ const logger = Debug('acp:store:mem');
 
 export class MemStore implements IStorage {
   public connected = true;
-  private expired = new Map();
-  private cache = new Map();
+  private expired = new Map<string, number>();
+  private cache = new Map<string, string>();
 
   constructor(private ttl_sec: number) {}
-  public get(key: string, cb: (error: unknown, buffer: string) => void): void {
-    if (!this.expired.has(key)) {
-      return cb(new Error('Not found'), null);
-    }
-    if (this.expired.get(key) < Date.now()) {
-      return cb(new Error('Expired'), null);
-    }
-    if (this.cache.has(key)) {
-      return cb(null, this.cache.get(key));
-    }
-    return cb(new Error('Not found'), null);
+
+  async get(key: string): Promise<string | null> {
+    if (!this.expired.has(key)) return null;
+    if (this.expired.get(key) < Date.now()) return null;
+    return this.cache.get(key) ?? null;
   }
 
-  public set(key: string, value: string, cb: () => void): void {
+  async set(key: string, value: string, ttl_sec?: number): Promise<void> {
     this.cache.set(key, value);
-    this.expired.set(key, Date.now() + this.ttl_sec * 1000);
-    cb();
+    const ttl = ttl_sec ?? this.ttl_sec;
+    this.expired.set(key, Date.now() + ttl * 1000);
   }
 
-  public del(key: string, cb: (error: unknown, reply: number) => void): void {
+  async del(key: string): Promise<number> {
+    const existed = this.cache.has(key);
     this.cache.delete(key);
     this.expired.delete(key);
-    cb(null, 1);
+    return existed ? 1 : 0;
   }
 
-  public expire(key: string, ttl_sec: number): void {
-    this.expired.set(key, Date.now() + ttl_sec * 1000);
-  }
-
-  private _purgeByPattern(pattern: string, cb: (error: unknown, reply: number) => void): void {
+  async purgeByPattern(pattern: string): Promise<number> {
     let deleted = 0;
     for (const key of this.cache.keys()) {
       if (!minimatch(String(key), pattern)) continue;
@@ -47,15 +38,7 @@ export class MemStore implements IStorage {
       this.expired.delete(key);
       deleted += 1;
     }
-
-    cb(null, deleted);
-  }
-  public purgeByPattern(pattern: string, cb: (error: unknown, reply: number) => void): void {
-    try {
-      this._purgeByPattern(pattern, cb);
-    } catch (e) {
-      logger(`[purgeByPattern] Error: ${e?.message}`);
-      cb(e, 0);
-    }
+    logger(`[purgeByPattern] deleted ${deleted} keys for pattern ${pattern}`);
+    return deleted;
   }
 }

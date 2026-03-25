@@ -59,10 +59,36 @@ Osham delegates pattern matching to the `minimatch` library which implements she
 - **In-memory store (`MemStore`)**: purge by pattern iterates keys and removes matches. This operation runs in-process and is immediate.
 - **Redis store**: If the storage driver exposes `purgeByPattern`, it will be used. Otherwise Osham falls back to `SCAN` + batch `DEL` to avoid blocking Redis.
 
+## Authentication
+
+Osham supports a lightweight shared-secret mechanism to protect the purge endpoint. Set the `OSHAM_PURGE_SECRET` environment variable to a secret value; callers must then supply the same value in the `x-osham-purge-secret` request header, or the request is rejected with a `401 Unauthorized` response.
+
+```sh
+# Start Osham with a purge secret:
+OSHAM_PURGE_SECRET=my-secret-token osham
+
+# Purge with the secret header:
+curl -X POST 'http://localhost:26192/__osham/purge?pattern=O:dummyRest:/api/v1/employees**' \
+  -H 'x-osham-purge-secret: my-secret-token'
+```
+
+If `OSHAM_PURGE_SECRET` is not set, no authentication is required — appropriate for trusted internal networks only.
+
+## Broad-pattern warnings
+
+Patterns that do not start with `O:` (the namespace prefix) may accidentally match cache keys across all namespaces. When such a pattern is used, Osham returns a `warning` field in the response body alongside the `deleted` count:
+
+```json
+{ "deleted": 3, "warning": "Pattern may match keys across all namespaces. Use the \"O:<namespace>:<path>\" prefix ..." }
+```
+
+Always prefer namespaced patterns like `O:myNs:/api/v1/users*` over bare globs like `*` or `**`.
+
 ## Security and safety
 
-- Restrict access to the purge endpoint — it can invalidate a lot of cached data. Use firewall rules or authentication in front of the endpoint.
+- Restrict access to the purge endpoint — it can invalidate a lot of cached data. Use `OSHAM_PURGE_SECRET` and/or firewall rules to prevent unauthorized purges.
 - Consider logging purges and rate-limiting purge requests in production.
+- The purge endpoint accepts `POST` and `DELETE` methods; other methods return `405 Method Not Allowed`.
 
 ## Examples and tips
 

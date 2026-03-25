@@ -79,11 +79,12 @@ export class Context implements IContext {
     return socket.writable;
   }
   set(field: string, val: string): Context {
-    // @todo if header not send
-    try {
-      this.res.setHeader(field, val);
-    } catch (e) {
-      logger('Error set headers', field, val);
+    if (!this.res.headersSent) {
+      try {
+        this.res.setHeader(field, val);
+      } catch (e) {
+        logger('Error set headers', field, val);
+      }
     }
     return this;
   }
@@ -99,14 +100,16 @@ export class Context implements IContext {
     if (statuses.empty[code]) {
       // strip headers
       this.body = null;
-      return res.end();
+      res.end();
+      return;
     }
 
     if ('HEAD' === this.method) {
       if (!res.headersSent) {
         // ctx.length = Buffer.byteLength(JSON.stringify(body));
       }
-      return res.end();
+      res.end();
+      return;
     }
 
     // status body

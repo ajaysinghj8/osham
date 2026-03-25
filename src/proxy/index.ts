@@ -90,6 +90,7 @@ class Proxy {
     dataStream?: Stream,
   ): Promise<IProxyReponseCtx> {
     logger(`Request(${method}) ${path}`);
+    logger(`Request headers %O`, headers);
     const proxyCtx: Partial<IProxyReponseCtx> = {
       pipes,
       toPromise,
@@ -101,22 +102,26 @@ class Proxy {
       if (this.options.timeout) {
         request.setTimeout(this.options.timeout, () => request.abort());
       }
+      logger(`Request options %O`, options);
       if (dataStream && dataStream.pipe) {
         dataStream.pipe(request);
       }
       request.end();
       return new Promise(resolve => {
         request.on('response', (response: IncomingMessage) => {
+          logger(`Response(${response.statusCode}) ${path}`);
+          logger(`Response headers %O`, response.headers);
           resolve({ ...proxyCtx, request, response } as IProxyReponseCtx);
         });
-        request.on('error', (e: Error) =>
+        request.on('error', (e: Error) =>{
+          logger(`Request error ${e.message} for ${path}`);
           resolve({
             ...proxyCtx,
             request,
             response: { ...Proxy.ErrorResponse },
             message: e.message,
-          } as IProxyReponseCtx),
-        );
+          } as IProxyReponseCtx);
+      });
         request.on('abort', (e: Error) =>
           resolve({
             ...proxyCtx,
@@ -177,9 +182,6 @@ function pipes(ctx: IContext, osham_headers: Record<string, string> = {}) {
   ctx.responseHeaders = writeHeaders(headers, ctx);
   writeHeaders(osham_headers, ctx);
   ctx.body = message || response;
-  /** if not res.headersSent */
-  /** @TODO:: ctx.setHeaders */
-  /** if not res.finished */
   return this;
 }
 
