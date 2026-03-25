@@ -8,16 +8,30 @@ import { PurgePage } from './screens/PurgePage';
 import { AuditPage } from './screens/AuditPage';
 import { NotFoundPage } from './screens/NotFoundPage';
 import { Sidebar } from './ui/Sidebar';
-import { AdminSecretBar } from './ui/AdminSecretBar';
+import { TopBar } from './ui/TopBar';
 import { AuthGate } from './ui/AuthGate';
 
+const SIDEBAR_STORAGE_KEY = 'osham-sidebar-collapsed';
+
 function AdminLayout() {
+  const [collapsed, setCollapsed] = React.useState<boolean>(
+    () => localStorage.getItem(SIDEBAR_STORAGE_KEY) === 'true',
+  );
+
+  function toggle() {
+    setCollapsed(prev => {
+      const next = !prev;
+      localStorage.setItem(SIDEBAR_STORAGE_KEY, String(next));
+      return next;
+    });
+  }
+
   return (
     <AuthGate>
       <div className="app-shell">
-        <Sidebar />
-        <main className="content-shell">
-          <AdminSecretBar />
+        <TopBar collapsed={collapsed} onToggle={toggle} />
+        <Sidebar collapsed={collapsed} onToggle={toggle} />
+        <main className={`content-shell${collapsed ? ' collapsed' : ''}`}>
           <Outlet />
         </main>
       </div>
@@ -32,12 +46,12 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <Navigate to="/admin/dashboard" replace /> },
       { path: '/admin/dashboard', element: <DashboardPage /> },
-      { path: '/admin/config', element: <ConfigPage /> },
-      { path: '/admin/metrics', element: <MetricsPage /> },
-      { path: '/admin/health', element: <HealthPage /> },
-      { path: '/admin/purge', element: <PurgePage /> },
-      { path: '/admin/audit', element: <AuditPage /> },
-      { path: '*', element: <NotFoundPage /> },
+      { path: '/admin/config',    element: <ConfigPage /> },
+      { path: '/admin/metrics',   element: <MetricsPage /> },
+      { path: '/admin/health',    element: <HealthPage /> },
+      { path: '/admin/purge',     element: <PurgePage /> },
+      { path: '/admin/audit',     element: <AuditPage /> },
+      { path: '*',                element: <NotFoundPage /> },
     ],
   },
 ]);
