@@ -11,6 +11,23 @@ function formatTimestamp(value?: string | null): string {
   return date.toLocaleString();
 }
 
+function formatUptime(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  return `${h}h ${m}m`;
+}
+
+function StatRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="stat-row">
+      <span className="stat-label">{label}</span>
+      <span className="stat-val">{value}</span>
+    </div>
+  );
+}
+
 export function HealthPage() {
   const [health, setHealth] = React.useState<HealthResponse | null>(null);
   const [startup, setStartup] = React.useState<StartupSummaryResponse | null>(null);
@@ -36,35 +53,56 @@ export function HealthPage() {
     load();
   }, [load]);
 
+  const healthOk = health ? (health.status === 'ok' || health.status === 'healthy') : null;
+  const cacheOk = health ? (health.cache?.status === 'connected' || health.cache?.status === 'ok') : null;
+
   return (
-    <Page title="Health" subtitle="Operational health, startup features, and namespace visibility for the running server.">
-      <div className="toolbar">
+    <Page subtitle="Operational health, startup features, and namespace visibility for the running server.">
+      <div className="refresh-bar">
         <button className="button" onClick={load} disabled={busy}>
-          {busy ? 'Refreshing…' : 'Refresh Health'}
+          {busy ? 'Refreshing…' : 'Refresh'}
         </button>
       </div>
 
-      {error ? <div className="code-block">{error}</div> : null}
+      {error && <div className="cfg-banner cfg-banner--error">{error}</div>}
 
       <div className="card-grid">
         <Card title="Service Status">
-          <p>Status: {health?.status || 'loading...'}</p>
-          <p>Uptime: {health ? `${health.uptimeSeconds}s` : '—'}</p>
+          <StatRow
+            label="Status"
+            value={
+              healthOk === null ? '—' : (
+                <span className={`service-status service-status--${healthOk ? 'ok' : 'warn'}`}>
+                  {healthOk ? 'Online' : 'Degraded'}
+                </span>
+              )
+            }
+          />
+          <StatRow label="Uptime" value={health ? formatUptime(health.uptimeSeconds) : '—'} />
         </Card>
         <Card title="Cache Backend">
-          <p>State: {health?.cache.status || '—'}</p>
-          <p>Backend: {health?.cache.backend || '—'}</p>
+          <StatRow
+            label="State"
+            value={
+              cacheOk === null ? '—' : (
+                <span className={`service-status service-status--${cacheOk ? 'ok' : 'err'}`}>
+                  {health?.cache.status}
+                </span>
+              )
+            }
+          />
+          <StatRow label="Backend" value={health?.cache.backend ?? '—'} />
         </Card>
         <Card title="Config State">
-          <p>Loaded: {String(health?.config.loaded ?? false)}</p>
-          <p>Revision: {health?.config.revision || '—'}</p>
-          <p>Source: {health?.config.source || '—'}</p>
-          <p>Applied: {formatTimestamp(health?.config.lastAppliedAt)}</p>
+          <StatRow label="Loaded" value={String(health?.config.loaded ?? false)} />
+          <StatRow label="Revision" value={health?.config.revision ?? '—'} />
+          <StatRow label="Source" value={health?.config.source ?? '—'} />
+          <StatRow label="Applied" value={formatTimestamp(health?.config.lastAppliedAt)} />
         </Card>
         <Card title="Startup Summary">
-          <p>Version: {startup?.version || '—'}</p>
-          <p>Namespaces: {startup?.namespaceCount ?? '—'}</p>
-          <p>Warnings: {startup?.warnings.length ?? 0}</p>
+          <StatRow label="Version" value={startup?.version ?? '—'} />
+          <StatRow label="Namespaces" value={startup?.namespaceCount ?? '—'} />
+          <StatRow label="Warnings" value={startup?.warnings.length ?? 0} />
         </Card>
       </div>
 
@@ -75,7 +113,7 @@ export function HealthPage() {
               {name}: {enabled ? 'on' : 'off'}
             </span>
           ))}
-          {!startup ? <span className="status-pill disabled">loading…</span> : null}
+          {!startup && <span className="status-pill disabled">loading…</span>}
         </div>
       </Card>
 

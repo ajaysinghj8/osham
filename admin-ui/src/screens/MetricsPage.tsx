@@ -50,6 +50,15 @@ function HitRatioBar({ ratio }: { ratio: number }) {
   );
 }
 
+function StatRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="stat-row">
+      <span className="stat-label">{label}</span>
+      <span className="stat-val">{value}</span>
+    </div>
+  );
+}
+
 export function MetricsPage() {
   const [summary, setSummary] = React.useState<MetricsSummary | null>(null);
   const [rows, setRows] = React.useState<NamespaceMetricsSummary[]>([]);
@@ -112,16 +121,16 @@ export function MetricsPage() {
     [...rows].sort((left, right) => right.cacheSizeBytes - left.cacheSizeBytes)[0] || null;
 
   return (
-    <Page title="Metrics" subtitle="Aggregate and per-namespace cache performance for the running Osham instance.">
-      <div className="toolbar">
+    <Page subtitle="Aggregate and per-namespace cache performance for the running Osham instance.">
+      <div className="refresh-bar">
         <button className="button" onClick={load} disabled={busy}>
-          {busy ? 'Refreshing…' : 'Refresh Metrics'}
+          {busy ? 'Refreshing…' : 'Refresh'}
         </button>
-        {lastRefreshed ? (
-          <span className="toolbar-meta">
+        {lastRefreshed && (
+          <span className="refresh-bar__meta">
             Last refreshed {formatTime(lastRefreshed)} — next in {countdown}s
           </span>
-        ) : null}
+        )}
       </div>
 
       {metricsDisabled ? (
@@ -133,52 +142,57 @@ export function MetricsPage() {
           </p>
         </div>
       ) : error ? (
-        <div className="code-block">{error}</div>
+        <div className="cfg-banner cfg-banner--error">{error}</div>
       ) : null}
 
       <div className="card-grid">
         <Card title="Total Requests">
-          <p>{summary?.requests ?? '—'}</p>
+          <div className="big-stat">{summary?.requests ?? '—'}</div>
         </Card>
         <Card title="Cache Hit Ratio">
           {summary ? (
-            <>
-              <HitRatioBadge ratio={summary.hitRatio} />
+            <div className="summary-card">
+              <div className="big-stat">{formatPercent(summary.hitRatio)}</div>
               <HitRatioBar ratio={summary.hitRatio} />
-              <p>Hits: {summary.cacheHits} / Misses: {summary.cacheMisses}</p>
-            </>
+              <StatRow label="Hits" value={summary.cacheHits} />
+              <StatRow label="Misses" value={summary.cacheMisses} />
+            </div>
           ) : (
-            <p>—</p>
+            <div className="big-stat">—</div>
           )}
         </Card>
         <Card title="Pooled Requests">
-          <p>{summary?.pooledRequests ?? '—'}</p>
+          <div className="big-stat">{summary?.pooledRequests ?? '—'}</div>
         </Card>
         <Card title="Estimated Cache Size">
-          <p>{summary ? formatBytes(summary.cacheSizeBytes) : '—'}</p>
+          <div className="big-stat">{summary ? formatBytes(summary.cacheSizeBytes) : '—'}</div>
         </Card>
       </div>
 
       <div className="card-grid">
         <Card title="Hottest Namespace">
-          <p>{hottestNamespace ? hottestNamespace.namespace : 'No traffic yet'}</p>
-          <p>Requests: {hottestNamespace?.requests ?? '—'}</p>
-          <p>Latency p95: {hottestNamespace ? formatSeconds(hottestNamespace.latency.p95) : '—'}</p>
+          <div className="summary-card">
+            <span className="section-title">{hottestNamespace?.namespace ?? 'No traffic yet'}</span>
+            <StatRow label="Requests" value={hottestNamespace?.requests ?? '—'} />
+            <StatRow label="Latency p95" value={hottestNamespace ? formatSeconds(hottestNamespace.latency.p95) : '—'} />
+          </div>
         </Card>
         <Card title="Weakest Cache Performance">
-          <p>{coldestCacheNamespace ? coldestCacheNamespace.namespace : 'No traffic yet'}</p>
-          <p>Hit ratio: {coldestCacheNamespace ? formatPercent(coldestCacheNamespace.hitRatio) : '—'}</p>
-          <p>
-            Hits / Misses:{' '}
-            {coldestCacheNamespace
-              ? `${coldestCacheNamespace.cacheHits} / ${coldestCacheNamespace.cacheMisses}`
-              : '—'}
-          </p>
+          <div className="summary-card">
+            <span className="section-title">{coldestCacheNamespace?.namespace ?? 'No traffic yet'}</span>
+            <StatRow label="Hit ratio" value={coldestCacheNamespace ? <HitRatioBadge ratio={coldestCacheNamespace.hitRatio} /> : '—'} />
+            <StatRow
+              label="Hits / Misses"
+              value={coldestCacheNamespace ? `${coldestCacheNamespace.cacheHits} / ${coldestCacheNamespace.cacheMisses}` : '—'}
+            />
+          </div>
         </Card>
         <Card title="Largest Namespace Cache">
-          <p>{largestCacheNamespace ? largestCacheNamespace.namespace : 'No cached responses yet'}</p>
-          <p>Cache size: {largestCacheNamespace ? formatBytes(largestCacheNamespace.cacheSizeBytes) : '—'}</p>
-          <p>Pooled requests: {largestCacheNamespace?.pooledRequests ?? '—'}</p>
+          <div className="summary-card">
+            <span className="section-title">{largestCacheNamespace?.namespace ?? 'No cached responses yet'}</span>
+            <StatRow label="Cache size" value={largestCacheNamespace ? formatBytes(largestCacheNamespace.cacheSizeBytes) : '—'} />
+            <StatRow label="Pooled requests" value={largestCacheNamespace?.pooledRequests ?? '—'} />
+          </div>
         </Card>
       </div>
 

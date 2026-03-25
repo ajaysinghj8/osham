@@ -91,7 +91,7 @@ export function PurgePage() {
         </div>
       )}
 
-      {error ? <div className="code-block">{error}</div> : null}
+      {error && <div className="cfg-banner cfg-banner--error">{error}</div>}
 
       {result && (
         <div className="purge-result card">

@@ -1006,3 +1006,92 @@ label {
   flex-direction: column;
   gap: var(--sp-3);
 }
+
+/* ─── Phase 3 — Polish utilities ─────────────────────────────── */
+
+/* Stat row — key/value pairs inside cards */
+.stat-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 0.875rem;
+}
+.stat-row:last-child { border-bottom: 0; }
+
+.stat-label { color: var(--text-muted); white-space: nowrap; }
+
+.stat-val {
+  color: var(--text-primary);
+  font-weight: 500;
+  text-align: right;
+  word-break: break-all;
+}
+
+/* Big stat — prominent number for summary cards */
+.big-stat {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.1;
+  margin: var(--sp-2) 0 var(--sp-1);
+}
+
+.big-stat__sub {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+/* Refresh bar */
+.refresh-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-5);
+}
+
+.refresh-bar__meta {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+/* Status pill with dot for service status */
+.service-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--r-pill);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.service-status--ok   { background: var(--ok-bg);   border: 1px solid var(--ok-border);   color: var(--ok-text); }
+.service-status--warn { background: var(--warn-bg);  border: 1px solid var(--warn-border);  color: var(--warn-text); }
+.service-status--err  { background: var(--err-bg);   border: 1px solid var(--err-border);   color: var(--err-text); }
+.service-status__dot  { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+
+/* Monospace inline value */
+.mono { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 0.82em; }
+
+/* Section title (below card-grid) */
+.section-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin: var(--sp-5) 0 var(--sp-3);
+}
+
+/* Card with large top number */
+.summary-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+/* Utility */
+.text-muted { color: var(--text-muted); font-size: 0.9em; }

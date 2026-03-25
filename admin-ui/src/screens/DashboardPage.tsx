@@ -35,6 +35,15 @@ function formatTime(date: Date): string {
   return date.toLocaleTimeString();
 }
 
+function StatRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="stat-row">
+      <span className="stat-label">{label}</span>
+      <span className="stat-val">{value}</span>
+    </div>
+  );
+}
+
 export function DashboardPage() {
   const [health, setHealth] = React.useState<HealthResponse | null>(null);
   const [metrics, setMetrics] = React.useState<MetricsSummary | null>(null);
@@ -95,56 +104,79 @@ export function DashboardPage() {
 
   const enabledFeatures = Object.entries(startup?.features || {}).filter(([, enabled]) => enabled);
 
+  const healthOk = health ? (health.status === 'ok' || health.status === 'healthy') : null;
+  const cacheOk = health ? (health.cache?.status === 'connected' || health.cache?.status === 'ok') : null;
+
   return (
-    <Page title="Dashboard" subtitle="High-level operational overview for Osham.">
-      <div className="toolbar">
+    <Page subtitle="High-level operational overview for Osham.">
+      <div className="refresh-bar">
         <button className="button" onClick={load} disabled={busy}>
-          {busy ? 'Refreshing…' : 'Refresh Dashboard'}
+          {busy ? 'Refreshing…' : 'Refresh'}
         </button>
-        {lastRefreshed ? (
-          <span className="toolbar-meta">
+        {lastRefreshed && (
+          <span className="refresh-bar__meta">
             Last refreshed {formatTime(lastRefreshed)} — next in {countdown}s
           </span>
-        ) : null}
+        )}
       </div>
 
-      {error ? <div className="code-block">{error}</div> : null}
+      {error && <div className="cfg-banner cfg-banner--error">{error}</div>}
 
       <div className="card-grid">
         <Card title="Service Health">
-          <p>Status: {health?.status || 'loading...'}</p>
-          <p>Uptime: {health ? formatUptime(health.uptimeSeconds) : '—'}</p>
-          <p>Cache: {health?.cache.backend || '—'} ({health?.cache.status || '—'})</p>
+          <StatRow
+            label="Status"
+            value={
+              healthOk === null ? '—' : (
+                <span className={`service-status service-status--${healthOk ? 'ok' : 'warn'}`}>
+                  {healthOk ? 'Online' : 'Degraded'}
+                </span>
+              )
+            }
+          />
+          <StatRow label="Uptime" value={health ? formatUptime(health.uptimeSeconds) : '—'} />
+          <StatRow
+            label="Cache"
+            value={
+              cacheOk === null ? '—' : (
+                <span className={`service-status service-status--${cacheOk ? 'ok' : 'err'}`}>
+                  {health?.cache.backend ?? 'Cache'} {cacheOk ? '●' : '○'}
+                </span>
+              )
+            }
+          />
         </Card>
         <Card title="Config Revision">
-          <p>Revision: {health?.config.revision || 'loading...'}</p>
-          <p>Source: {health?.config.source || '—'}</p>
-          <p>Applied: {formatTimestamp(health?.config.lastAppliedAt)}</p>
+          <StatRow label="Revision" value={health?.config.revision ?? '—'} />
+          <StatRow label="Source" value={health?.config.source ?? '—'} />
+          <StatRow label="Applied" value={formatTimestamp(health?.config.lastAppliedAt)} />
         </Card>
         <Card title="Traffic Snapshot">
-          <p>Requests: {metrics?.requests ?? '—'}</p>
-          <p>Hit ratio: {metrics ? formatPercent(metrics.hitRatio) : '—'}</p>
-          <p>Cache size: {metrics ? formatBytes(metrics.cacheSizeBytes) : '—'}</p>
+          <StatRow label="Requests" value={metrics?.requests ?? '—'} />
+          <StatRow label="Hit ratio" value={metrics ? formatPercent(metrics.hitRatio) : '—'} />
+          <StatRow label="Cache size" value={metrics ? formatBytes(metrics.cacheSizeBytes) : '—'} />
         </Card>
         <Card title="Namespaces">
-          <p>Configured: {startup?.namespaceCount ?? '—'}</p>
-          <p>Observed: {namespaceMetrics.length}</p>
-          <p>Warnings: {startup?.warnings?.length ?? 0}</p>
+          <StatRow label="Configured" value={startup?.namespaceCount ?? '—'} />
+          <StatRow label="Observed" value={namespaceMetrics.length} />
+          <StatRow label="Warnings" value={startup?.warnings?.length ?? 0} />
         </Card>
       </div>
 
       <div className="card-grid">
         <Card title="Operational Focus">
-          <p>
-            Busiest namespace:{' '}
-            {topNamespace ? `${topNamespace.namespace} (${topNamespace.requests} requests)` : 'No traffic yet'}
-          </p>
-          <p>
-            Weakest cache hit ratio:{' '}
-            {lowestHitRatioNamespace
-              ? `${lowestHitRatioNamespace.namespace} (${formatPercent(lowestHitRatioNamespace.hitRatio)})`
-              : 'No active namespaces yet'}
-          </p>
+          <StatRow
+            label="Busiest namespace"
+            value={topNamespace ? `${topNamespace.namespace} (${topNamespace.requests} req)` : 'No traffic yet'}
+          />
+          <StatRow
+            label="Weakest hit ratio"
+            value={
+              lowestHitRatioNamespace
+                ? `${lowestHitRatioNamespace.namespace} (${formatPercent(lowestHitRatioNamespace.hitRatio)})`
+                : 'No active namespaces yet'
+            }
+          />
         </Card>
         <Card title="Feature Flags">
           <div className="pill-list compact-pill-list">

@@ -61,10 +61,10 @@ export function AuditPage() {
         </button>
       </div>
 
-      {error ? <div className="code-block">{error}</div> : null}
+      {error && <div className="cfg-banner cfg-banner--error">{error}</div>}
 
       {!loading && !error && events.length === 0 ? (
-        <p style={{ color: '#a8b4c7' }}>No audit events yet.</p>
+        <p className="text-muted">No audit events yet.</p>
       ) : (
         <table className="table">
           <thead>
@@ -81,7 +81,7 @@ export function AuditPage() {
               <tr key={`${event.time}-${index}`}>
                 <td style={{ whiteSpace: 'nowrap' }}>{formatTime(event.time)}</td>
                 <td>
-                  <code>{event.action}</code>
+                  <span className="mono">{event.action}</span>
                 </td>
                 <td>
                   <span
@@ -91,7 +91,7 @@ export function AuditPage() {
                   </span>
                 </td>
                 <td>{event.actor}</td>
-                <td style={{ color: '#a8b4c7', fontSize: '0.9em' }}>{renderDetails(event)}</td>
+                <td className="text-muted">{renderDetails(event)}</td>
               </tr>
             ))}
           </tbody>
