@@ -31,7 +31,6 @@ export function createNameSpaceHandler(
 
   return async function handler(ctx: IContext, next: Koa.Next) {
     if (!namespacePath.test(ctx.path)) return next();
-    logger(`${ctx.path} matched!!`);
     Metrics.recordRequest(namespace);
     const startedAt = Date.now();
     const finish = (statusCode: number) => {
@@ -39,7 +38,7 @@ export function createNameSpaceHandler(
     };
 
     const pathToCall = ctx.path.match(namespacePath)[1];
-    logger(`${pathToCall} will be processed!`);
+    logger(`→ %s %s`, ctx.method, pathToCall);
 
     // Allow/deny pattern enforcement: deny wins over allow.
     // Normalize to an absolute path. We try matching both /path and /path/ so that
@@ -67,7 +66,7 @@ export function createNameSpaceHandler(
     const cacheConfig = configContext.getCacheConfig(pathToCall);
     const proxyPath = pathToCall + (ctx.search || '');
     if (ctx.method !== 'GET' || !cacheConfig) {
-      logger(`${ctx.method} ${pathToCall} ${cacheConfig ? '(No cache config)' : ''}`);
+      logger(`bypass %s %s — %s`, ctx.method, pathToCall, !cacheConfig ? 'no cache config' : 'non-GET');
       const proxyCtxN = await proxyRequest(proxyPath, ctx.method, ctx.headers);
       const response = await proxyCtxN.toPromise().catch(err => err);
       finish(response.statusCode);
@@ -76,7 +75,7 @@ export function createNameSpaceHandler(
 
     const cacheKey = generateKey(namespace, ctx, cacheConfig);
     const oshamHeaders = new OshamHeaders(cacheKey);
-    logger(`Cache Check ${pathToCall}`);
+    logger(`cache check %s (key: %s)`, pathToCall, cacheKey);
     try {
       const cached = await Cache.getWithMetrics(cacheKey, namespace);
       finish(200);
@@ -84,9 +83,9 @@ export function createNameSpaceHandler(
     } catch (e) {
       oshamHeaders.setHit(false);
     }
-    logger(`Cache miss ${pathToCall}`);
+    logger(`cache miss %s`, pathToCall);
     if (!cacheConfig.pool) {
-      logger(`[POOL] No request pool`);
+      logger(`[pool] no pool configured for %s, forwarding directly`, pathToCall);
       const proxyCtxM = await proxyRequest(proxyPath, ctx.method, ctx.headers);
       const responsePromise = proxyCtxM.toPromise();
       responsePromise.then(res => Cache.put(cacheKey, res.toJSON(), +cacheConfig.expires)).catch(() => ({}));
@@ -96,7 +95,7 @@ export function createNameSpaceHandler(
     }
 
     if (RequestPool.has(cacheKey) && Cache.isConnected()) {
-      logger(`[POOL] Follower request for ${cacheKey}`);
+      logger(`[pool] follower — waiting on in-flight request for %s`, cacheKey);
       oshamHeaders.setPooled(true);
       const response = await RequestPool.wait(cacheKey);
       const pooledResponse = response as { statusCode: number };
@@ -104,7 +103,7 @@ export function createNameSpaceHandler(
       return respondWithCtx(ctx, oshamHeaders.toRecords())(response as never);
     }
     if (Cache.isConnected()) {
-      logger(`[POOL] Main request for ${cacheKey}`);
+      logger(`[pool] leader — acquiring pool slot for %s`, cacheKey);
       RequestPool.add(cacheKey);
       oshamHeaders.setPooledMain(true);
     }

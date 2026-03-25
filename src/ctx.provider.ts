@@ -83,14 +83,24 @@ export class Context implements IContext {
       try {
         this.res.setHeader(field, val);
       } catch (e) {
-        logger('Error set headers', field, val);
+        logger(`error setting header %s=%s — %s`, field, val, (e as Error).message);
       }
     }
     return this;
   }
 
   respond(): void {
-    logger('responding');
+    const url   = this.path + (this.search || '');
+    const cache = this.res.getHeader('x-osham-cache') ?? '—';
+    const key   = this.res.getHeader('x-osham-key');
+    const time  = this.res.getHeader('x-osham-time');
+    const parts: string[] = [
+      `${this.method} ${url} → ${this.statusCode}`,
+      `cache=${cache}`,
+      ...(key  ? [`key=${key}`]   : []),
+      ...(time ? [`time=${time}`] : []),
+    ];
+    logger(parts.join('  '));
     if (!this.writable) return;
 
     const res = this.res;

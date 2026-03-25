@@ -14,9 +14,8 @@ export class Cache {
   }
 
   static async put<T>(key: string, value: T, exptime?: number): Promise<T> {
-    logger('Caching ->', key);
     await this.store.set(key, JSON.stringify(value), exptime);
-    logger('Cached ->', key);
+    logger(`put %s (ttl: %s)`, key, exptime != null ? `${exptime}s` : 'default');
     return value;
   }
 
@@ -24,10 +23,10 @@ export class Cache {
     if (!Cache.isConnected()) throw new Error('Unable to connect Cache storage.');
     const buffer = await this.store.get(key);
     if (!buffer) {
-      logger('failed cache ->', key);
+      logger(`miss %s`, key);
       throw new Error(`Cache not found for key ${key}`);
     }
-    logger('From cache ->', key);
+    logger(`hit %s`, key);
     return JSON.parse(buffer) as T;
   }
 
@@ -35,11 +34,11 @@ export class Cache {
     if (!Cache.isConnected()) throw new Error('Unable to connect Cache storage.');
     const buffer = await this.store.get(key);
     if (!buffer) {
-      logger('failed cache ->', key);
+      logger(`miss %s`, key);
       Metrics.recordCacheMiss(namespace);
       throw new Error(`Cache not found for key ${key}`);
     }
-    logger('From cache ->', key);
+    logger(`hit %s`, key);
     Metrics.recordCacheHit(namespace);
     return JSON.parse(buffer) as T;
   }

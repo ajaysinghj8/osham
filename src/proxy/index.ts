@@ -89,8 +89,6 @@ class Proxy {
     headers: Record<string, string>,
     dataStream?: Stream,
   ): Promise<IProxyReponseCtx> {
-    logger(`Request(${method}) ${path}`);
-    logger(`Request headers %O`, headers);
     const proxyCtx: Partial<IProxyReponseCtx> = {
       pipes,
       toPromise,
@@ -98,43 +96,47 @@ class Proxy {
     };
     try {
       const options = this.getRequestOptions(path, method, headers);
+      const protocol = this.isSecure ? 'https' : 'http';
+      const target = `${protocol}://${options.host}${options.path}`;
+      logger(`→ %s %s → %s`, method, path, target);
       const request = this.agent.request(options);
       if (this.options.timeout) {
         request.setTimeout(this.options.timeout, () => request.abort());
       }
-      logger(`Request options %O`, options);
       if (dataStream && dataStream.pipe) {
         dataStream.pipe(request);
       }
       request.end();
       return new Promise(resolve => {
         request.on('response', (response: IncomingMessage) => {
-          logger(`Response(${response.statusCode}) ${path}`);
-          logger(`Response headers %O`, response.headers);
+          logger(`← %d %s %s`, response.statusCode, method, path);
           resolve({ ...proxyCtx, request, response } as IProxyReponseCtx);
         });
-        request.on('error', (e: Error) =>{
-          logger(`Request error ${e.message} for ${path}`);
+        request.on('error', (e: Error & { code?: string }) => {
+          logger(`✗ %s %s — %s [%s] target=%s`, method, path, e.message, e.code ?? 'ERR', target);
           resolve({
             ...proxyCtx,
             request,
             response: { ...Proxy.ErrorResponse },
             message: e.message,
           } as IProxyReponseCtx);
-      });
-        request.on('abort', (e: Error) =>
+        });
+        request.on('abort', (e: Error & { code?: string }) => {
+          logger(`✗ %s %s — aborted [%s] target=%s`, method, path, e?.code ?? 'ABORT', target);
           resolve({
             ...proxyCtx,
             request,
             response: { ...Proxy.ErrorResponse },
-            message: e.message,
-          } as IProxyReponseCtx),
-        );
+            message: e?.message ?? 'Request aborted',
+          } as IProxyReponseCtx);
+        });
       });
     } catch (e) {
+      const err = e as Error & { code?: string };
+      logger(`✗ %s %s — %s [%s]`, method, path, err.message, err.code ?? 'ERR');
       return Promise.resolve({
         ...proxyCtx,
-        message: e.message,
+        message: err.message,
         response: { ...Proxy.ErrorResponse },
       } as IProxyReponseCtx);
     }
