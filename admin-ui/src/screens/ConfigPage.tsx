@@ -290,7 +290,7 @@ export function ConfigPage() {
       setSelectedNamespace(current => (current && data.namespaces[current] ? current : firstNamespace));
       setValidation(null);
       setError(null);
-      setLastSavedSnapshot(JSON.stringify(buildPayload(data)));
+      setLastSavedSnapshot(JSON.stringify(buildPayload(data), null, 2));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load config');
     }
@@ -695,13 +695,18 @@ export function ConfigPage() {
             <Card title="Revision History">
               {history.length ? (
                 <div className="stack-list">
-                  {history.slice(0, 8).map(snapshot => {
+                  {history
+                    .reduce<AdminConfigSnapshot[]>((acc, snapshot) => {
+                      if (!acc.some(s => s.revision === snapshot.revision)) acc.push(snapshot);
+                      return acc;
+                    }, [])
+                    .slice(0, 15)
+                    .map(snapshot => {
                     const isCurrent = snapshot.revision === config.meta.revision;
                     const rollbackBusy = busy === `rollback:${snapshot.revision}`;
                     return (
-                      <div key={`${snapshot.reason}-${snapshot.revision}-${snapshot.createdAt}`} className="code-block">
+                      <div key={`${snapshot.revision}-${snapshot.createdAt}`} className="code-block">
                         <strong>{snapshot.revision}</strong>
-                        <div>{snapshot.reason === 'rollback' ? 'Rollback snapshot' : 'Saved snapshot'}</div>
                         <div>{snapshot.createdAt}</div>
                         <div>{isCurrent ? 'Current live revision' : 'Available for rollback'}</div>
                         <button

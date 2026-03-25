@@ -74,6 +74,19 @@ before(async function () {
       return;
     }
 
+    // Error simulation routes used by Proxy Error Handling tests.
+    if (pathname === '/not-found') {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'not found' }));
+      return;
+    }
+
+    if (pathname === '/server-error') {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'internal server error' }));
+      return;
+    }
+
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ status: 'ok' }));
   });
@@ -1287,5 +1300,44 @@ describe('Admin API – Config Endpoints', function () {
     const body = JSON.parse(res.text);
     assert.strictEqual(body.ok, false);
     assert.strictEqual(body.error.code, 'NOT_FOUND');
+  });
+});
+
+describe('Proxy Error Handling', function () {
+  this.timeout(10000);
+
+  it('GET backend 404 should be forwarded as 404, not thrown as unhandled error', async function () {
+    const res = await client.get('/api/v1/not-found');
+    assert.strictEqual(res.status, 404, 'Expected 404 forwarded from backend, not 500');
+  });
+
+  it('GET backend 404 response body should be preserved', async function () {
+    const res = await client.get('/api/v1/not-found');
+    assert.strictEqual(res.status, 404);
+    const body = JSON.parse(res.text);
+    assert.strictEqual(body.error, 'not found');
+  });
+
+  it('GET backend 500 should be forwarded as 500, not thrown as unhandled error', async function () {
+    const res = await client.get('/api/v1/server-error');
+    assert.strictEqual(res.status, 500, 'Expected 500 forwarded from backend, not lost/unhandled');
+  });
+
+  it('GET backend 500 response body should be preserved', async function () {
+    const res = await client.get('/api/v1/server-error');
+    assert.strictEqual(res.status, 500);
+    const body = JSON.parse(res.text);
+    assert.strictEqual(body.error, 'internal server error');
+  });
+
+  it('POST backend 404 should be forwarded as 404 (non-GET passthrough path)', async function () {
+    // POST bypasses cache logic entirely — exercises the non-GET proxy passthrough branch
+    const res = await client.post('/api/v1/not-found');
+    assert.strictEqual(res.status, 404, 'Expected 404 forwarded from backend on POST');
+  });
+
+  it('POST backend 500 should be forwarded as 500 (non-GET passthrough path)', async function () {
+    const res = await client.post('/api/v1/server-error');
+    assert.strictEqual(res.status, 500, 'Expected 500 forwarded from backend on POST');
   });
 });
