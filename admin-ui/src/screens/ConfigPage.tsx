@@ -256,7 +256,12 @@ export function ConfigPage() {
     setAllowText(fromLines(namespace.allow));
     setDenyText(fromLines(namespace.deny));
     setRulesText(JSON.stringify(namespace.rules, null, 2));
-  }, [namespace, selectedNamespace]);
+  // Only reset text areas when the user switches to a different namespace.
+  // Omitting `namespace` from deps intentionally — we do NOT want to reset
+  // the text areas whenever config mutates (e.g. after save/patch), only
+  // when the selection itself changes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedNamespace]);
 
   // ── Patchers ──────────────────────────────────────────────────
   function patchConfig(updater: (c: AdminConfigView) => AdminConfigView) {
