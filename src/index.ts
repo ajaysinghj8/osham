@@ -9,6 +9,7 @@ import { HealthCheck } from './middlewares/healthCheck';
 import { PurgeCache } from './middlewares/purgeCache';
 import { MetricsEndpoint } from './middlewares/metricsEndpoint';
 import { AdminConfig } from './middlewares/adminConfig';
+import { AdminUI } from './middlewares/adminUI';
 import { createNameSpaceHandler } from './middlewares/nameSpaceHandler';
 import { CtxProvider } from './ctx.provider';
 import * as compose from 'koa-compose';
@@ -104,6 +105,7 @@ const DynamicRuntime: ComposedMiddleware<IContext> = async (ctx, next) => {
 
 // Admin API is always mounted; auth is controlled via OSHAM_ADMIN_SECRET env var.
 middlewares.push(AdminConfig);
+middlewares.push(AdminUI);
 middlewares.push(DynamicRuntime);
 
 Server.on('request', async (req: IncomingMessage, res: ServerResponse) => {

@@ -319,8 +319,17 @@ export async function AdminConfig(ctx: IContext, next: Koa.Next): Promise<void> 
       const revision = computeRevision(yamlContent);
       persistAdminConfigSnapshot({ revision, content: yamlContent, reason: 'save' });
 
+      const newConfig = getCacheConfig();
+      const now = new Date().toISOString();
+      setAdminState(newConfig, {
+        source: 'cache-config.yml',
+        lastLoadedAt: now,
+        lastAppliedAt: now,
+        revision,
+      });
+
       appendAdminAuditEvent({
-        time: new Date().toISOString(),
+        time: now,
         action: 'config.save',
         actor: 'admin',
         result: 'success',

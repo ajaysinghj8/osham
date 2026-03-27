@@ -1,0 +1,9 @@
+node_modules
+lib
+admin-ui/node_modules
+admin-ui/dist
+.env
+*.log
+.git
+docs
+test
