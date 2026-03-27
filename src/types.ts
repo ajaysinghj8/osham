@@ -70,6 +70,7 @@ export interface IContext {
   res: ServerResponse;
   set: (field: string, val: string) => IContext;
   respond: () => void;
+  respondWith: (response: IInternalResponse, oshamHeaders?: Record<string, string>) => IContext;
   body: unknown;
   responseHeaders: Record<string, string>;
   writable: boolean;

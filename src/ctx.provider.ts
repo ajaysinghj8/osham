@@ -4,7 +4,7 @@ import * as Debug from 'debug';
 import * as statuses from 'statuses';
 import * as parse from 'parseurl';
 import qs = require('querystring');
-import { IContext } from './types';
+import { IContext, IInternalResponse } from './types';
 
 const logger = Debug('acp:server');
 
@@ -86,6 +86,22 @@ export class Context implements IContext {
         logger(`error setting header %s=%s — %s`, field, val, (e as Error).message);
       }
     }
+    return this;
+  }
+
+  respondWith({ statusCode, headers, data }: IInternalResponse, oshamHeaders: Record<string, string> = {}) {
+    this.statusCode = statusCode;
+    for (const key in headers) {
+      if (!Object.prototype.hasOwnProperty.call(headers, key)) continue;
+      this.set(key, String(headers[key]));
+    }
+    for (const key in oshamHeaders) {
+      if (!Object.prototype.hasOwnProperty.call(oshamHeaders, key)) continue;
+      this.set(key, String(oshamHeaders[key]));
+    }
+    this.body = data;
+    this.statusCode = statusCode;
+    // return { statusCode, headers, data };
     return this;
   }
 

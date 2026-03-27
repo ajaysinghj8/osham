@@ -4,7 +4,7 @@ import { generateKey } from '../services/genkey.service';
 import { Cache } from '../services/cache.service';
 import { RequestPool } from '../services/pool.service';
 import { ConfigContext } from '../services/Config.Context';
-import { respondWithCtx, errorToData } from '../utils';
+import { errorToData } from '../utils';
 import { createProxy } from '../proxy';
 
 import * as Koa from 'koa';
@@ -70,7 +70,7 @@ export function createNameSpaceHandler(
       const proxyCtxN = await proxyRequest(proxyPath, ctx.method, ctx.headers);
       const response = await proxyCtxN.toPromise().catch(err => err);
       finish(response.statusCode);
-      return respondWithCtx(ctx, OshamHeaders.notConfigured(ctx.method))(response as never);
+      return ctx.respondWith(response as never, OshamHeaders.notConfigured(ctx.method));
     }
 
     const cacheKey = generateKey(namespace, ctx, cacheConfig);
@@ -79,7 +79,7 @@ export function createNameSpaceHandler(
     try {
       const cached = await Cache.getWithMetrics(cacheKey, namespace);
       finish(200);
-      return respondWithCtx(ctx, oshamHeaders.setHit(true).toRecords())(cached as never);
+      return ctx.respondWith(cached as never, oshamHeaders.setHit(true).toRecords());
     } catch (e) {
       oshamHeaders.setHit(false);
     }
@@ -88,10 +88,13 @@ export function createNameSpaceHandler(
       logger(`[pool] no pool configured for %s, forwarding directly`, pathToCall);
       const proxyCtxM = await proxyRequest(proxyPath, ctx.method, ctx.headers);
       const responsePromise = proxyCtxM.toPromise();
-      responsePromise.then(res => Cache.put(cacheKey, res.toJSON(), +cacheConfig.expires)).catch(() => ({}));
+      responsePromise.then(
+        res => Cache.put(cacheKey, res.toJSON(), +cacheConfig.expires),
+        () => {},
+      );
       const response = await responsePromise.catch(err => err);
       finish(response.statusCode);
-      return respondWithCtx(ctx, oshamHeaders.toRecords())(response as never);
+      return ctx.respondWith(response as never, oshamHeaders.toRecords());
     }
 
     if (RequestPool.has(cacheKey) && Cache.isConnected()) {
@@ -100,7 +103,7 @@ export function createNameSpaceHandler(
       const response = await RequestPool.wait(cacheKey);
       const pooledResponse = response as { statusCode: number };
       finish(pooledResponse.statusCode || 200);
-      return respondWithCtx(ctx, oshamHeaders.toRecords())(response as never);
+      return ctx.respondWith(response as never, oshamHeaders.toRecords());
     }
     if (Cache.isConnected()) {
       logger(`[pool] leader — acquiring pool slot for %s`, cacheKey);
@@ -109,20 +112,12 @@ export function createNameSpaceHandler(
     }
     const proxyCtx = await proxyRequest(proxyPath, ctx.method, ctx.headers);
     const responsePromise = proxyCtx.toPromise();
-    responsePromise
-      .then(
-        res => RequestPool.putAndPublish(cacheKey, res.toJSON(), +cacheConfig.expires),
-        error => {
-          const response = errorToData(error);
-          RequestPool.errorAndPublish(cacheKey, response);
-        },
-      )
-      .catch(error => {
-        const response = errorToData(error);
-        RequestPool.errorAndPublish(cacheKey, response);
-      });
+    responsePromise.then(
+      res => RequestPool.putAndPublish(cacheKey, res.toJSON(), +cacheConfig.expires),
+      error => RequestPool.errorAndPublish(cacheKey, errorToData(error)),
+    );
     const response = await responsePromise.catch(err => err);
     finish(response.statusCode);
-    return respondWithCtx(ctx, oshamHeaders.toRecords())(response as never);
+    return ctx.respondWith(response as never, oshamHeaders.toRecords());
   };
 }
