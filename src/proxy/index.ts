@@ -18,6 +18,7 @@ export interface IProxyOptions {
   port?: number;
   followRedirects?: boolean;
   changeOrigin?: boolean;
+  insecureSkipVerify?: boolean;
   timeout?: number;
 }
 
@@ -81,6 +82,9 @@ class Proxy {
     this.port = this.isSecure ? 443 : 80;
     const agents = this.options.followRedirects ? FollowRedirects : NativeAgents;
     this.agent = this.isSecure ? agents.https : agents.http;
+    if (this.isSecure && options.insecureSkipVerify) {
+      logger(`⚠ insecureSkipVerify=true for %s — TLS certificate errors will be ignored`, options.target);
+    }
   }
 
   request(
@@ -143,12 +147,13 @@ class Proxy {
   }
 
   private getRequestOptions(path: string, method: string, headers: Record<string, string>) {
-    const options = {
+    const options: Https.RequestOptions = {
       port: this.target.port || this.port,
       method,
       headers: { ...headers },
       host: this.target.hostname,
       path: join(this.target.path, path),
+      ...(this.isSecure && this.options.insecureSkipVerify ? { rejectUnauthorized: false } : {}),
     };
 
     if (typeof options.headers.connection !== 'string' || !Proxy.upgradeHeader.test(options.headers.connection)) {

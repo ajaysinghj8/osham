@@ -24,6 +24,7 @@ const KNOWN_NAMESPACE_KEYS = new Set([
   'timeout',
   'followRedirects',
   'changeOrigin',
+  'insecureSkipVerify',
   'cache',
   'rules',
   'allow',
@@ -151,6 +152,13 @@ export function validateConfig(config: unknown): IFullConfig {
     if ('changeOrigin' in nsCfg && nsCfg.changeOrigin !== undefined && typeof nsCfg.changeOrigin !== 'boolean') {
       throw new Error(`cache-config.yml: namespace "${ns}": "changeOrigin" must be a boolean`);
     }
+    if (
+      'insecureSkipVerify' in nsCfg &&
+      nsCfg.insecureSkipVerify !== undefined &&
+      typeof nsCfg.insecureSkipVerify !== 'boolean'
+    ) {
+      throw new Error(`cache-config.yml: namespace "${ns}": "insecureSkipVerify" must be a boolean`);
+    }
 
     for (const listField of ['allow', 'deny'] as const) {
       if (listField in nsCfg && nsCfg[listField] !== undefined) {
@@ -185,6 +193,7 @@ export function validateConfig(config: unknown): IFullConfig {
     if (nsCfg.timeout !== undefined) nsOptions.timeout = nsCfg.timeout as number;
     if (nsCfg.followRedirects !== undefined) nsOptions.followRedirects = nsCfg.followRedirects as boolean;
     if (nsCfg.changeOrigin !== undefined) nsOptions.changeOrigin = nsCfg.changeOrigin as boolean;
+    if (nsCfg.insecureSkipVerify !== undefined) nsOptions.insecureSkipVerify = nsCfg.insecureSkipVerify as boolean;
     if (nsCfg.allow !== undefined) nsOptions.allow = nsCfg.allow as string[];
     if (nsCfg.deny !== undefined) nsOptions.deny = nsCfg.deny as string[];
 

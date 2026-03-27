@@ -19,6 +19,7 @@ export interface INameSpaceOptions {
   port?: number;
   followRedirects?: boolean;
   changeOrigin?: boolean;
+  insecureSkipVerify?: boolean;
   timeout?: number;
   rules?: IRulesOptions;
   cache: ICacheOptions;
