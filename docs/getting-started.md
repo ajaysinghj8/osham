@@ -6,6 +6,8 @@ Osham is a caching reverse proxy. You define upstreams in `cache-config.yml`, Os
 
 ## 1. Installation & Running
 
+### Local
+
 ```bash
 npm install
 npm run build
@@ -18,6 +20,34 @@ npm run dev
 ```
 
 The server starts on port `26192` by default. Override with `PORT=8080` in `.env`.
+
+### Docker
+
+Build the image (includes admin UI):
+
+```bash
+docker build -t osham .
+```
+
+Run with a config file and environment variables:
+
+```bash
+docker run -p 26192:26192 \
+  -v $(pwd)/cache-config.yml:/app/cache-config.yml \
+  -v $(pwd)/.env:/app/.env \
+  -e OSHAM_ADMIN_ALLOW_INSECURE_LOCAL=false \
+  osham
+```
+
+| Flag | Description |
+|---|---|
+| `-p 26192:26192` | Expose the proxy port |
+| `-v .../cache-config.yml` | Mount your config file (required) |
+| `-v .../.env` | Mount your `.env` for secrets and connection strings |
+| `-e OSHAM_ADMIN_SECRET=...` | Set admin secret directly instead of via `.env` |
+| `-e OSHAM_ADMIN_ALLOW_INSECURE_LOCAL=false` | Require `x-osham-admin-secret` on every admin request |
+
+The admin UI is served at `http://localhost:26192/`.
 
 ---
 
