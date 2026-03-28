@@ -1,0 +1,43 @@
+config:
+  target: "http://localhost:26192"
+  phases:
+    # Warm up: fill the cache
+    - name: "Warm up"
+      duration: 10
+      arrivalRate: 5
+    # Ramp up: increase load
+    - name: "Ramp up"
+      duration: 30
+      arrivalRate: 10
+      rampTo: 50
+    # Sustained load: measure cache hit rate
+    - name: "Sustained load"
+      duration: 600
+      arrivalRate: 50
+      rampTo: 500
+  defaults:
+    headers:
+      accept: "application/json"
+  plugins:
+    statsd: {}
+
+scenarios:
+  # Cache hit scenario: same resource hit repeatedly
+  - name: "GET employees (cached)"
+    weight: 60
+    flow:
+      - get:
+          url: "/api/v1/employees"
+          expect:
+            - statusCode: 200
+
+  # Health check
+  - name: "Health check"
+    weight: 10
+    flow:
+      - get:
+          url: "/__osham/admin/health"
+          headers:
+            x-osham-admin-secret: "23a9c8e-1b2c-4d5e-9f0a-123456789abc"
+          expect:
+            - statusCode: 200

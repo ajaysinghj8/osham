@@ -32,3 +32,20 @@ jobs:
       - name: Test
         run: npm test
 
+  build-admin-ui:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install admin-ui dependencies
+        run: cd admin-ui && npm ci
+
+      - name: Build admin-ui
+        run: cd admin-ui && npm run build

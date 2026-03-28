@@ -39,7 +39,7 @@ SECURE=false
 TIMEOUT=7000
 ```
 
-See `cache-config.example.yml` for full options and examples. The server supports per-namespace rules, cache expiry, pooling, and query/header-based cache variation.
+The server supports per-namespace rules, cache expiry, pooling, and query/header-based cache variation. See the inline example below and the full config reference in the docs.
 
 ### Example `cache-config.yml`
 
@@ -74,6 +74,40 @@ dummyRest:
       cache: false
 ```
 
+## Allow / Deny URL patterns
+
+Each namespace accepts optional `allow` and `deny` glob pattern lists that control which paths Osham proxies. Requests blocked by these rules receive a `403` response with the header `x-osham-cache: denied`.
+
+**Precedence rules:**
+
+- If `deny` is set and the path matches any pattern → **403 Forbidden** (deny always wins).
+- Else if `allow` is set and the path does **not** match any pattern → **403 Forbidden**.
+- If neither `allow` nor `deny` is present, all paths within the namespace are handled normally (existing behavior unchanged).
+
+**Example:**
+
+```yaml
+myNs:
+  expose: '/api/v1/*'
+  target: 'http://localhost:3000'
+  cache:
+    expires: 10s
+  allow:
+    - '/employees/**'
+    - '/employee/*'
+  deny:
+    - '/employees/private/**'
+```
+
+In this example:
+
+- `/employees/123` → proxied (matches allow)
+- `/employee/5` → proxied (matches allow)
+- `/employees/private/data` → **403** (deny wins, even though it also matches `/employees/**` in allow)
+- `/departments/1` → **403** (not in allow list)
+
+Patterns follow glob syntax (e.g. `*` matches a single path segment, `**` matches any number of segments).
+
 ## Purge cache (administrative)
 
 Osham provides an admin endpoint to invalidate cache by exact key or by pattern. See the detailed guide:
@@ -104,6 +138,30 @@ Scrape this endpoint from your Prometheus instance to track cache efficiency and
 
 - [Metrics](docs/metrics.md)
 
+## Admin UI
+
+Osham now includes a sidecar admin UI under `admin-ui/` for config editing, health/metrics visibility, purge tooling, audit review, config history, rollback, and draft import/export.
+
+### Run the admin UI locally
+
+Start Osham first so the admin API is reachable, then in another shell:
+
+```sh
+cd admin-ui
+npm install
+npm run build
+# or for local development
+npm run dev
+```
+
+By default the Vite dev server proxies `'/__osham/*'` requests to `http://127.0.0.1:26192`. If your Osham server listens elsewhere, override the proxy target:
+
+```sh
+OSHAM_ADMIN_API_TARGET=http://127.0.0.1:3001 npm run dev
+```
+
+The UI stores `x-osham-admin-secret` in `sessionStorage` only and will prompt again if the saved secret is rejected by the admin API.
+
 ## When to use Osham
 
 - Reduce backend load and TTFB for high-read API endpoints
@@ -127,11 +185,26 @@ The diagram below illustrates how Osham handles incoming HTTP GET requests:
 
 ![Osham Architecture](https://raw.githubusercontent.com/ajaysinghj8/osham/master/public/Arch.svg?sanitize=true&raw=true)
 
+## Troubleshooting
+
+Having problems? See the [Troubleshooting guide](docs/troubleshooting.md) for solutions to common issues including:
+
+- Server won't start (missing config, invalid YAML, HTTPS env vars)
+- Cache misses or incorrect TTL behaviour
+- 403 responses from allow/deny rules
+- Purge not working (auth, pattern format)
+- Metrics endpoint returning 404
+- Admin UI auth and CORS issues
+
 ## Contributing
 
-PRs and issues welcome. Run tests with:
+PRs and issues welcome. See the [Contributor Setup guide](docs/contributor-setup.md) for full local setup instructions, test guidance, and PR guidelines.
+
+Quick start:
 
 ```sh
+npm install
+npm run build
 npm test
 ```
 

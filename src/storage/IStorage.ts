@@ -1,8 +1,7 @@
 export interface IStorage {
   connected: boolean;
-  set: (key: string, value: string, cb: () => void) => void;
-  get: (key: string, cb: (error: unknown, buffer: string) => void) => void;
-  del: (key: string, cb: (error: unknown, reply: number) => void) => void;
-  expire: (key: string, ttl: number) => void;
-  purgeByPattern?: (pattern: string, cb: (error: unknown, reply: number) => void) => void;
+  set(key: string, value: string, ttl?: number): Promise<void>;
+  get(key: string): Promise<string | null>;
+  del(key: string): Promise<number>;
+  purgeByPattern?(pattern: string): Promise<number>;
 }

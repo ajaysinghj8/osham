@@ -62,7 +62,16 @@ typings/
 
 lib
 
+admin-ui/dist
+admin-ui/src/**/*.js
+admin-ui/src/**/*.d.ts
+admin-ui/vite.config.js
+admin-ui/vite.config.d.ts
+admin-ui/tsconfig.tsbuildinfo
+
 cache-config.yml
+.osham-admin-history/
+.osham-admin-audit.jsonl
 
 .vscode
 .temp

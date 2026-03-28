@@ -12,23 +12,34 @@ function memo(fn: CallableFunction) {
     return result;
   };
 }
+function toSeconds(expires: string | number): number {
+  if (typeof expires === 'number') return expires;
+  return parseToMs(expires) / 1000;
+}
+
 export class ConfigContext {
   private regexRules: Record<string, string> = {};
+  private resolvedCache: ICacheOptions;
+  private resolvedRules: IRulesOptions;
 
-  constructor(private cacheOption: ICacheOptions, private rules: IRulesOptions) {
-    if (this.cacheOption && this.cacheOption.expires) {
-      this.cacheOption.expires = parseToMs(this.cacheOption.expires) / 1000;
-    }
+  constructor(cacheOption: ICacheOptions, rules: IRulesOptions) {
+    // Work with local copies so shared config objects are never mutated.
+    this.resolvedCache =
+      cacheOption && cacheOption.expires
+        ? { ...cacheOption, expires: toSeconds(cacheOption.expires) }
+        : cacheOption;
 
-    for (const key in this.rules) {
-      if (!Object.prototype.hasOwnProperty.call(this.rules, key)) continue;
-      const regex = pathToRegExp(key);
-      const cache = this.rules[key].cache;
-      if (cache && cache.expires) {
-        cache.expires = parseToMs(cache.expires) / 1000;
-      }
-      this.regexRules[key] = regex;
+    const resolvedRules: IRulesOptions = {};
+    for (const key in rules) {
+      if (!Object.prototype.hasOwnProperty.call(rules, key)) continue;
+      this.regexRules[key] = pathToRegExp(key);
+      const cache = rules[key].cache;
+      resolvedRules[key] = {
+        ...rules[key],
+        cache: cache && cache.expires ? { ...cache, expires: toSeconds(cache.expires) } : cache,
+      };
     }
+    this.resolvedRules = resolvedRules;
 
     this.getCacheConfig = memo(this.getCacheConfig.bind(this));
   }
@@ -37,16 +48,16 @@ export class ConfigContext {
     const cacheConfig = this.getConfigFromRule(path);
     if (typeof cacheConfig === 'object' && cacheConfig !== null) return cacheConfig;
     if (cacheConfig === false) return cacheConfig;
-    return this.cacheOption;
+    return this.resolvedCache;
   }
 
   private getConfigFromRule(path: string) {
     const _path = `/${path}/`;
-    for (const key in this.rules) {
-      if (!Object.prototype.hasOwnProperty.call(this.rules, key)) continue;
+    for (const key in this.resolvedRules) {
+      if (!Object.prototype.hasOwnProperty.call(this.resolvedRules, key)) continue;
       const regex = this.regexRules[key];
       if (_path.match(regex)) {
-        return this.rules[key].cache;
+        return this.resolvedRules[key].cache;
       }
     }
     return null;

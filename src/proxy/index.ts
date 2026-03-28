@@ -18,6 +18,7 @@ export interface IProxyOptions {
   port?: number;
   followRedirects?: boolean;
   changeOrigin?: boolean;
+  insecureSkipVerify?: boolean;
   timeout?: number;
 }
 
@@ -81,6 +82,9 @@ class Proxy {
     this.port = this.isSecure ? 443 : 80;
     const agents = this.options.followRedirects ? FollowRedirects : NativeAgents;
     this.agent = this.isSecure ? agents.https : agents.http;
+    if (this.isSecure && options.insecureSkipVerify) {
+      logger(`⚠ insecureSkipVerify=true for %s — TLS certificate errors will be ignored`, options.target);
+    }
   }
 
   request(
@@ -89,7 +93,6 @@ class Proxy {
     headers: Record<string, string>,
     dataStream?: Stream,
   ): Promise<IProxyReponseCtx> {
-    logger(`Request(${method}) ${path}`);
     const proxyCtx: Partial<IProxyReponseCtx> = {
       pipes,
       toPromise,
@@ -97,6 +100,9 @@ class Proxy {
     };
     try {
       const options = this.getRequestOptions(path, method, headers);
+      const protocol = this.isSecure ? 'https' : 'http';
+      const target = `${protocol}://${options.host}${options.path}`;
+      logger(`→ %s %s → %s`, method, path, target);
       const request = this.agent.request(options);
       if (this.options.timeout) {
         request.setTimeout(this.options.timeout, () => request.abort());
@@ -107,41 +113,47 @@ class Proxy {
       request.end();
       return new Promise(resolve => {
         request.on('response', (response: IncomingMessage) => {
+          logger(`← %d %s %s`, response.statusCode, method, path);
           resolve({ ...proxyCtx, request, response } as IProxyReponseCtx);
         });
-        request.on('error', (e: Error) =>
+        request.on('error', (e: Error & { code?: string }) => {
+          logger(`✗ %s %s — %s [%s] target=%s`, method, path, e.message, e.code ?? 'ERR', target);
           resolve({
             ...proxyCtx,
             request,
             response: { ...Proxy.ErrorResponse },
             message: e.message,
-          } as IProxyReponseCtx),
-        );
-        request.on('abort', (e: Error) =>
+          } as IProxyReponseCtx);
+        });
+        request.on('abort', (e: Error & { code?: string }) => {
+          logger(`✗ %s %s — aborted [%s] target=%s`, method, path, e?.code ?? 'ABORT', target);
           resolve({
             ...proxyCtx,
             request,
             response: { ...Proxy.ErrorResponse },
-            message: e.message,
-          } as IProxyReponseCtx),
-        );
+            message: e?.message ?? 'Request aborted',
+          } as IProxyReponseCtx);
+        });
       });
     } catch (e) {
+      const err = e as Error & { code?: string };
+      logger(`✗ %s %s — %s [%s]`, method, path, err.message, err.code ?? 'ERR');
       return Promise.resolve({
         ...proxyCtx,
-        message: e.message,
+        message: err.message,
         response: { ...Proxy.ErrorResponse },
       } as IProxyReponseCtx);
     }
   }
 
   private getRequestOptions(path: string, method: string, headers: Record<string, string>) {
-    const options = {
+    const options: Https.RequestOptions = {
       port: this.target.port || this.port,
       method,
       headers: { ...headers },
       host: this.target.hostname,
       path: join(this.target.path, path),
+      ...(this.isSecure && this.options.insecureSkipVerify ? { rejectUnauthorized: false } : {}),
     };
 
     if (typeof options.headers.connection !== 'string' || !Proxy.upgradeHeader.test(options.headers.connection)) {
@@ -177,9 +189,6 @@ function pipes(ctx: IContext, osham_headers: Record<string, string> = {}) {
   ctx.responseHeaders = writeHeaders(headers, ctx);
   writeHeaders(osham_headers, ctx);
   ctx.body = message || response;
-  /** if not res.headersSent */
-  /** @TODO:: ctx.setHeaders */
-  /** if not res.finished */
   return this;
 }
 

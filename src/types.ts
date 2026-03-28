@@ -19,9 +19,12 @@ export interface INameSpaceOptions {
   port?: number;
   followRedirects?: boolean;
   changeOrigin?: boolean;
+  insecureSkipVerify?: boolean;
   timeout?: number;
-  rules: IRulesOptions;
+  rules?: IRulesOptions;
   cache: ICacheOptions;
+  allow?: string[];
+  deny?: string[];
 }
 
 export interface IInternalResponse {
@@ -41,7 +44,18 @@ export interface IParentConfig {
   changeOrigin: boolean;
 }
 
-export type ICacheConfig = IParentConfig | { [key: string]: INameSpaceOptions };
+/**
+ * IFullConfig is the structured result of parsing and validating cache-config.yml.
+ * It separates the top-level global settings from the namespace map, eliminating
+ * the need for unsafe casts when iterating over config entries.
+ *
+ * Replaces the old ICacheConfig union type (IParentConfig | { [key: string]: INameSpaceOptions })
+ * which blurred the two concerns into a single flat object.
+ */
+export interface IFullConfig {
+  globalConfig: IParentConfig;
+  namespaces: Record<string, INameSpaceOptions>;
+}
 
 export interface IContext {
   req: IncomingMessage;
@@ -56,6 +70,7 @@ export interface IContext {
   res: ServerResponse;
   set: (field: string, val: string) => IContext;
   respond: () => void;
+  respondWith: (response: IInternalResponse, oshamHeaders?: Record<string, string>) => IContext;
   body: unknown;
   responseHeaders: Record<string, string>;
   writable: boolean;
